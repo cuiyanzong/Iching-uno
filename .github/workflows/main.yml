@@ -1,0 +1,83 @@
+name: Android Build
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    - run: npm install
+    - run: npm run build
+    - uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+    - uses: android-actions/setup-android@v3
+      with:
+        api-level: 34
+    - run: echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+    - name: Build APK
+      run: |
+        cd android
+        chmod +x gradlew
+        ./gradlew clean assembleRelease
+    - name: Find APK file
+      id: find-apk
+      run: |
+        echo "=== Searching for APK files ==="
+        apk_file=$(find android -name "*.apk" -type f | head -1)
+        if [ -z "$apk_file" ]; then
+          echo "::error::No APK file found"
+          echo "=== Debug: List all files ==="
+          find android -name "*.apk" -type f || echo "No APK files found at all"
+          ls -la android/app/build/outputs/apk/release/ || echo "Release dir not found"
+          ls -la android/app/build/outputs/apk/debug/ || echo "Debug dir not found"
+          exit 1
+        fi
+        echo "APK file found: $apk_file"
+        echo "APK_PATH=$apk_file" >> $GITHUB_OUTPUT
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-apk
+        path: ${{ steps.find-apk.outputs.APK_PATH }}
+    - name: Create Release
+      uses: actions/create-release@v1
+      id: create_release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ github.run_number }}
+        release_name: 六十四卦UNO v${{ github.run_number }}
+        body: |
+          ## 🎮 六十四卦UNO Android APK
+          
+          ### 📱 下载安装
+          - 点击下方APK文件下载
+          - 允许"未知来源"安装
+          - 完全离线运行，无需网络
+          
+          ### ✨ 游戏特色
+          - 🧠 智能AI对手，多种难度
+          - 🎯 完整积分系统和排行榜
+          - 🔊 传统五音阶音效
+          - 🎨 精美八卦动画效果
+          
+          **构建编号**: ${{ github.run_number }}
+          **构建时间**: ${{ github.event.head_commit.timestamp }}
+        draft: false
+        prerelease: false
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{ steps.find-apk.outputs.APK_PATH }}
+        asset_name: 六十四卦UNO-v${{ github.run_number }}.apk
+        asset_content_type: application/vnd.android.package-archive
