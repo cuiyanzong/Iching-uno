@@ -1,7 +1,7 @@
 {
-  "appId": "com.iching.uno",
-  "appName": "I-Ching UNO",
-  "webDir": "dist",
+  "appId": "com.replit.iching.uno",
+  "appName": "六十四卦 UNO",
+  "webDir": "dist/public",
   "bundledWebRuntime": false,
   "server": {
     "androidScheme": "https"
