@@ -8,34 +8,38 @@ interface CentralAreaProps {
 export default function CentralArea({ currentCard, deckCount }: CentralAreaProps) {
   // 音频播放现在直接在Card组件内部处理
   
-  // 检测APP环境 - 只在真正的APP中使用小尺寸
-  const isCapacitorApp = !!(window as any).Capacitor || 
-                        !!(window as any).cordova || 
-                        navigator.userAgent.includes('capacitor') ||
-                        window.location.protocol === 'file:';
+  // 多重检测方案：确保APK能被正确识别
+  const isCapacitor = !!(window as any).Capacitor;
+  const isNativeApp = isCapacitor && (window as any).Capacitor?.isNativePlatform?.();
+  const isWebView = navigator.userAgent.includes('wv') || navigator.userAgent.includes('Version/');
+  const isNotReplit = !window.location.hostname.includes('replit.dev');
+  const isSmallViewport = window.innerWidth <= 480;
   
-  // 检测真实的移动设备（排除桌面浏览器模拟）
-  const isRealMobileDevice = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) &&
-                           !navigator.userAgent.includes('Chrome') ||
-                           (navigator.userAgent.includes('Mobile') && !navigator.userAgent.includes('Windows'));
+  // 如果是Capacitor原生APP，或者不是replit域名+小视口，都使用compact
+  const isAPKEnvironment = isNativeApp || (isNotReplit && isSmallViewport);
   
-  // 只在APP环境中使用medium尺寸，浏览器始终使用large
-  const cardSize = isCapacitorApp ? "medium" : "large";
+  // APK环境使用compact，否则使用large
+  const cardSize = isAPKEnvironment ? "compact" : "large";
   
   // 根据环境调整间距和堆叠效果  
-  const spacing = isCapacitorApp ? "space-x-3" : "space-x-6 md:space-x-8";
-  const stackShadowSize = isCapacitorApp ? "w-16 h-24" : "w-20 h-28";
-  const emptyCardSize = isCapacitorApp ? "w-16 h-24" : "w-20 h-28";
+  const spacing = isAPKEnvironment ? "space-x-2" : "space-x-6 md:space-x-8";
+  const stackShadowSize = isAPKEnvironment ? "w-14 h-20" : "w-20 h-28";
+  const emptyCardSize = isAPKEnvironment ? "w-14 h-20" : "w-20 h-28";
   
   // 调试信息
   console.log('环境检测:', {
-    isCapacitorApp,
-    isRealMobileDevice,
+    isCapacitor,
+    isNativeApp,
+    isWebView,
+    isNotReplit,
+    isSmallViewport,
+    isAPKEnvironment,
     cardSize,
     userAgent: navigator.userAgent,
     windowSize: `${window.innerWidth}x${window.innerHeight}`,
     protocol: window.location.protocol,
-    hostname: window.location.hostname
+    hostname: window.location.hostname,
+    capacitorPlatform: (window as any).Capacitor?.getPlatform?.()
   });
 
   return (

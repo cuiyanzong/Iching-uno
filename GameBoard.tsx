@@ -159,7 +159,7 @@ export default memo(function GameBoard({
         )}
 
         {/* Central Game Area - Moved Up */}
-        <div className="flex-1 max-w-lg mx-8 -mt-16">
+        <div className="flex-1 max-w-md mx-12 -mt-16">
           {/* 方向变化通知已移动到父组件LocalGame.tsx */}
 
           {/* Centered Card Area */}
