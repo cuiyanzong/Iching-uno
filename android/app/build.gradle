@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "com.hexagram.uno"
+    namespace "com.replit.iching.uno"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.hexagram.uno"
+        applicationId "com.replit.iching.uno"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
