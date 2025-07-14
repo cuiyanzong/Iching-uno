@@ -1,0 +1,41 @@
+name: Build APK - Fixed
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    - run: npm install
+    - run: npm run build
+    - uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+    - uses: android-actions/setup-android@v3
+      with:
+        api-level: 34
+    - run: echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+    - name: Build APK
+      run: |
+        cd android
+        chmod +x gradlew
+        ./gradlew clean assembleRelease
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-apk
+        path: android/app/build/outputs/apk/release/app-release.apk
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ github.run_number }}
+        name: "六十四卦UNO APK v${{ github.run_number }}"
+        files: android/app/build/outputs/apk/release/app-release.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
