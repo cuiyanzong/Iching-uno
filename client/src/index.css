@@ -1,0 +1,341 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(0, 0%, 0%);
+  --foreground: hsl(0, 0%, 98%);
+  --muted: hsl(240, 3.7%, 15.9%);
+  --muted-foreground: hsl(240, 5%, 64.9%);
+  --popover: hsl(240, 10%, 3.9%);
+  --popover-foreground: hsl(0, 0%, 98%);
+  --card: hsl(240, 10%, 3.9%);
+  --card-foreground: hsl(0, 0%, 98%);
+  --border: hsl(240, 3.7%, 15.9%);
+  --input: hsl(240, 3.7%, 15.9%);
+  --primary: hsl(207, 90%, 54%);
+  --primary-foreground: hsl(211, 100%, 99%);
+  --secondary: hsl(240, 3.7%, 15.9%);
+  --secondary-foreground: hsl(0, 0%, 98%);
+  --accent: hsl(240, 3.7%, 15.9%);
+  --accent-foreground: hsl(0, 0%, 98%);
+  --destructive: hsl(0, 62.8%, 30.6%);
+  --destructive-foreground: hsl(0, 0%, 98%);
+  --ring: hsl(240, 4.9%, 83.9%);
+  --radius: 0.5rem;
+
+  /* Game specific colors */
+  --game-bg: linear-gradient(135deg, hsl(240, 100%, 5%) 0%, hsl(260, 80%, 8%) 25%, hsl(280, 60%, 12%) 50%, hsl(240, 50%, 15%) 75%, hsl(220, 40%, 18%) 100%);
+  --game-bg-pattern: none;
+  --card-fire: hsl(0, 84%, 47%);
+  --card-water: hsl(217, 91%, 60%);
+  --card-mountain: hsl(142, 71%, 45%);
+  --card-lake: hsl(30, 75%, 28%);
+  --card-earth: hsl(0, 0%, 9%);
+  --card-sky: hsl(0, 0%, 100%);
+  --card-thunder: hsl(45, 93%, 47%);
+  --card-wind: hsl(188, 83%, 40%);
+}
+
+/* Custom animations */
+@keyframes spin-counterclockwise {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+.animate-spin-ccw {
+  animation: spin-counterclockwise 1s linear infinite;
+}
+
+/* 炫酷版倒转乾坤光圈动画 */
+@keyframes spin-glow-clockwise {
+  0% {
+    transform: rotate(0deg);
+    box-shadow: 
+      0 0 50px rgba(255, 215, 0, 0.5),
+      0 0 100px rgba(255, 165, 0, 0.3),
+      inset 0 0 50px rgba(255, 215, 0, 0.2);
+  }
+  25% {
+    box-shadow: 
+      0 0 70px rgba(255, 215, 0, 0.8),
+      0 0 140px rgba(255, 165, 0, 0.5),
+      inset 0 0 70px rgba(255, 215, 0, 0.3);
+  }
+  50% {
+    box-shadow: 
+      0 0 90px rgba(255, 215, 0, 0.9),
+      0 0 180px rgba(255, 165, 0, 0.6),
+      inset 0 0 90px rgba(255, 215, 0, 0.4);
+  }
+  75% {
+    box-shadow: 
+      0 0 70px rgba(255, 215, 0, 0.8),
+      0 0 140px rgba(255, 165, 0, 0.5),
+      inset 0 0 70px rgba(255, 215, 0, 0.3);
+  }
+  100% {
+    transform: rotate(360deg);
+    box-shadow: 
+      0 0 50px rgba(255, 215, 0, 0.5),
+      0 0 100px rgba(255, 165, 0, 0.3),
+      inset 0 0 50px rgba(255, 215, 0, 0.2);
+  }
+}
+
+@keyframes spin-glow-counterclockwise {
+  0% {
+    transform: rotate(0deg);
+    box-shadow: 
+      0 0 50px rgba(255, 215, 0, 0.5),
+      0 0 100px rgba(255, 165, 0, 0.3),
+      inset 0 0 50px rgba(255, 215, 0, 0.2);
+  }
+  25% {
+    box-shadow: 
+      0 0 70px rgba(255, 215, 0, 0.8),
+      0 0 140px rgba(255, 165, 0, 0.5),
+      inset 0 0 70px rgba(255, 215, 0, 0.3);
+  }
+  50% {
+    box-shadow: 
+      0 0 90px rgba(255, 215, 0, 0.9),
+      0 0 180px rgba(255, 165, 0, 0.6),
+      inset 0 0 90px rgba(255, 215, 0, 0.4);
+  }
+  75% {
+    box-shadow: 
+      0 0 70px rgba(255, 215, 0, 0.8),
+      0 0 140px rgba(255, 165, 0, 0.5),
+      inset 0 0 70px rgba(255, 215, 0, 0.3);
+  }
+  100% {
+    transform: rotate(-360deg);
+    box-shadow: 
+      0 0 50px rgba(255, 215, 0, 0.5),
+      0 0 100px rgba(255, 165, 0, 0.3),
+      inset 0 0 50px rgba(255, 215, 0, 0.2);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 2.5s linear;
+}
+
+.animate-spin-slow-reverse {
+  animation: spin-slow-reverse 2.5s linear;
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes spin-slow-reverse {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+/* Hexagram pattern background using provided image */
+.hexagram-bg {
+  position: relative;
+  background: linear-gradient(135deg, 
+    hsl(240, 100%, 5%) 0%, 
+    hsl(260, 80%, 8%) 25%, 
+    hsl(280, 60%, 12%) 50%, 
+    hsl(240, 50%, 15%) 75%, 
+    hsl(220, 40%, 18%) 100%
+  );
+}
+
+.hexagram-bg::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.05) 0%, transparent 50%),
+              radial-gradient(circle at 70% 70%, rgba(255, 255, 255, 0.03) 0%, transparent 50%);
+  opacity: 0.1;
+  pointer-events: none;
+  z-index: 0;
+  mix-blend-mode: overlay;
+}
+
+.dark {
+  --background: hsl(0, 0%, 0%);
+  --foreground: hsl(0, 0%, 98%);
+  --muted: hsl(240, 3.7%, 15.9%);
+  --muted-foreground: hsl(240, 5%, 64.9%);
+  --popover: hsl(240, 10%, 3.9%);
+  --popover-foreground: hsl(0, 0%, 98%);
+  --card: hsl(240, 10%, 3.9%);
+  --card-foreground: hsl(0, 0%, 98%);
+  --border: hsl(240, 3.7%, 15.9%);
+  --input: hsl(240, 3.7%, 15.9%);
+  --primary: hsl(207, 90%, 54%);
+  --primary-foreground: hsl(211, 100%, 99%);
+  --secondary: hsl(240, 3.7%, 15.9%);
+  --secondary-foreground: hsl(0, 0%, 98%);
+  --accent: hsl(240, 3.7%, 15.9%);
+  --accent-foreground: hsl(0, 0%, 98%);
+  --destructive: hsl(0, 62.8%, 30.6%);
+  --destructive-foreground: hsl(0, 0%, 98%);
+  --ring: hsl(240, 4.9%, 83.9%);
+}
+
+/* Hide scrollbar for mobile card scrolling */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* Internet Explorer 10+ */
+  scrollbar-width: none;  /* Firefox */
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar { 
+  display: none;  /* Safari and Chrome */
+  width: 0;
+  height: 0;
+}
+
+/* Simplified mobile touch scrolling */
+@media (pointer: coarse) {
+  .scrollbar-hide {
+    scroll-snap-type: x proximity;
+    scroll-padding: 16px;
+  }
+}
+
+/* Ensure cards remain clickable */
+.card-drag-container > div {
+  pointer-events: auto;
+}
+
+/* Smooth momentum scrolling for touch devices */
+@media (hover: none) and (pointer: coarse) {
+  .card-drag-container {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+}
+
+/* Mobile scroll buttons styling */
+.mobile-scroll-button {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mobile-scroll-button {
+  transition: transform 0.05s ease, background-color 0.05s ease;
+}
+
+.mobile-scroll-button:active {
+  transform: scale(0.95);
+  background-color: rgba(0, 0, 0, 0.9);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased text-foreground;
+    background-color: var(--game-bg);
+  }
+}
+
+@layer components {
+  .bg-game-bg {
+    background-color: var(--game-bg);
+  }
+
+  .card-3d {
+    transform-style: preserve-3d;
+    transition: transform 0.02s ease, box-shadow 0.02s ease;
+  }
+  
+  .card-3d:hover {
+    transform: translateY(-4px) rotateY(5deg);
+  }
+  
+  .card-glow {
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+  }
+  
+  .selected-card {
+    transform: translateY(-8px);
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+  }
+  
+  .writing-vertical {
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+  }
+  
+  .rotate-90 {
+    transform: rotate(90deg);
+  }
+  
+  .rotate-270 {
+    transform: rotate(-90deg);
+  }
+
+  .card-fire {
+    background-color: var(--card-fire);
+  }
+  
+  .card-water {
+    background-color: var(--card-water);
+  }
+  
+  .card-mountain {
+    background-color: var(--card-mountain);
+  }
+  
+  .card-lake {
+    background-color: var(--card-lake);
+  }
+  
+  .card-earth {
+    background-color: var(--card-earth);
+  }
+  
+  .card-sky {
+    background-color: var(--card-sky);
+  }
+  
+  .card-thunder {
+    background-color: var(--card-thunder);
+  }
+  
+  .card-wind {
+    background-color: var(--card-wind);
+  }
+}
+
+@layer utilities {
+  .card-stack {
+    position: relative;
+  }
+  
+  .card-stacked {
+    position: absolute;
+    transition: all 0.02s ease;
+  }
+}
