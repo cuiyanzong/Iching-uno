@@ -1,0 +1,17 @@
+{
+  "name": "六十四卦 UNO",
+  "short_name": "I Ching UNO",
+  "description": "传统文化与现代游戏的完美结合",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a1a",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/assets/sixty-four-hexagrams_1750658246553-D6dPEl_Y.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
