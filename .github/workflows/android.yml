@@ -19,7 +19,6 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '20'
-        cache: 'npm'
         
     - name: Install dependencies
       run: npm install
@@ -40,7 +39,7 @@ jobs:
       uses: android-actions/setup-android@v3
       
     - name: Accept Android SDK licenses
-      run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+      run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
       
     - name: Make gradlew executable
       run: chmod +x ./android/gradlew
@@ -61,13 +60,3 @@ jobs:
         name: android-apk
         path: android/app/build/outputs/apk/release/app-release.apk
         retention-days: 30
-        
-    - name: Upload build logs on failure
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-logs
-        path: |
-          android/app/build/outputs/logs/
-          android/build/outputs/logs/
-        retention-days: 7
