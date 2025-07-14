@@ -37,6 +37,8 @@ jobs:
         chmod +x android/gradlew
         cd android
         ./gradlew assembleRelease --info --stacktrace
+        echo "=== Build completed, searching for APK files ==="
+        find . -name "*.apk" -type f 2>/dev/null | head -20 || echo "No APK files found yet"
         
     - name: Find and List APK Files
       run: |
@@ -52,28 +54,46 @@ jobs:
         ls -la android/build/ || echo "root build not found"
         ls -la android/build/outputs/ || echo "root outputs not found"
         
+    - name: Copy APK to Root and Upload
+      run: |
+        echo "=== Copying APK files to root directory ==="
+        find android -name "*.apk" -type f 2>/dev/null | while read apk; do
+          echo "Found APK: $apk"
+          cp "$apk" "./$(basename "$apk")"
+        done
+        echo "=== APK files in root directory ==="
+        ls -la *.apk 2>/dev/null || echo "No APK files copied to root"
+        
     - name: Upload APK Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: android-apk
         path: |
+          *.apk
           android/**/build/outputs/apk/**/*.apk
           android/app/build/outputs/apk/release/*.apk
           android/app/build/outputs/apk/debug/*.apk
           android/build/outputs/apk/**/*.apk
-          **/*.apk
         if-no-files-found: warn
         
     - name: Find APK for Release
       id: find_apk
       run: |
-        APK_FILE=$(find . -name "*.apk" -type f 2>/dev/null | head -1)
+        # First try to find APK in root directory
+        APK_FILE=$(ls *.apk 2>/dev/null | head -1)
         if [ -n "$APK_FILE" ]; then
           echo "APK_PATH=$APK_FILE" >> $GITHUB_OUTPUT
-          echo "Found APK: $APK_FILE"
+          echo "Found APK in root: $APK_FILE"
         else
-          echo "No APK file found"
-          exit 1
+          # Fallback to searching in android directory
+          APK_FILE=$(find android -name "*.apk" -type f 2>/dev/null | head -1)
+          if [ -n "$APK_FILE" ]; then
+            echo "APK_PATH=$APK_FILE" >> $GITHUB_OUTPUT
+            echo "Found APK in android: $APK_FILE"
+          else
+            echo "No APK file found anywhere"
+            exit 1
+          fi
         fi
         
     - name: Create GitHub Release
