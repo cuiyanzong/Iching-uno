@@ -1,0 +1,70 @@
+name: Build APK
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    - run: npm install
+    - run: npm run build
+    - uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+    - uses: android-actions/setup-android@v3
+      with:
+        api-level: 34
+    - run: echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+    - name: Debug Android Setup
+      run: |
+        echo "=== Android Directory Check ==="
+        ls -la android/
+        echo "=== Gradle Wrapper Check ==="
+        ls -la android/gradlew
+        echo "=== Android App Directory ==="
+        ls -la android/app/
+        echo "=== Build Files Check ==="
+        ls -la android/build.gradle android/app/build.gradle
+        
+    - name: Build APK with Debug Info
+      run: |
+        chmod +x android/gradlew
+        cd android
+        ./gradlew assembleRelease --info --stacktrace
+        
+    - name: Find APK Files
+      run: |
+        echo "=== Searching for APK files ==="
+        find android -name "*.apk" -type f | head -10
+        echo "=== APK output directory structure ==="
+        find android -name "outputs" -type d | head -5
+        ls -la android/app/build/outputs/apk/ || echo "Standard APK path not found"
+        ls -la android/app/build/outputs/apk/release/ || echo "Release APK path not found"
+        
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-apk
+        path: |
+          android/app/build/outputs/apk/release/*.apk
+          android/app/build/outputs/apk/debug/*.apk
+          android/app/build/outputs/apk/**/*.apk
+        if-no-files-found: warn
+        
+    - name: Create GitHub Release
+      if: success()
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ github.run_number }}
+        name: APK Release v${{ github.run_number }}
+        files: |
+          android/app/build/outputs/apk/release/*.apk
+          android/app/build/outputs/apk/**/*.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
