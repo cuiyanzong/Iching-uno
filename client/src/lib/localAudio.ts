@@ -6,9 +6,16 @@
 
 export type VoiceOption = 'yunxi' | 'xiaoyi';
 
-// 精简版本：移除音频文件依赖，使用空对象
-// 在生产环境中可以添加真实的音频数据
-const audioFiles: Record<string, string> = {};
+// 使用import导入audioBase64.js中的完整数据
+import { audioBase64Data } from '../../../audioBase64.js';
+// 导入技能语音数据
+import { skillAudioData } from '../../../skill_audio_base64.js';
+
+// 合并所有音频数据：卡牌语音 + 技能语音
+const audioFiles: Record<string, string> = {
+  ...audioBase64Data,
+  ...skillAudioData
+};
 
 class LocalAudioManager {
   private currentVoice: VoiceOption = 'yunxi';
@@ -142,11 +149,106 @@ class LocalAudioManager {
   }
 
   /**
+   * 播放技能语音
+   * @param skillElement 技能元素 ('earth', 'sky', 'water', 'fire', 'thunder', 'wind', 'mountain', 'lake')
+   * @param voice 语音选项，可选
+   */
+  playSkillAudio(skillElement: string, voice?: VoiceOption): void {
+    if (!this.enabled) return;
+    
+    const voiceToUse = voice || this.currentVoice;
+    const key = `skill_${skillElement}_${voiceToUse}`;
+    
+    // 获取技能语音URL
+    const audioUrl = audioFiles[key];
+    
+    if (!audioUrl) {
+      console.warn(`技能语音文件不存在: ${key}`);
+      // 尝试备用语音
+      const fallbackKey = `skill_${skillElement}_yunxi`;
+      const fallbackUrl = audioFiles[fallbackKey];
+      if (!fallbackUrl) {
+        console.log(`🔊 技能语音文件缺失: ${key}`);
+        return;
+      }
+      this.playAudio(fallbackKey);
+      return;
+    }
+    
+    try {
+      // 使用缓存的音频元素
+      let audio = this.audioCache.get(key);
+      
+      if (!audio) {
+        // 创建新的音频元素
+        audio = new Audio();
+        audio.src = audioUrl;
+        audio.volume = this.volume;
+        audio.preload = 'auto';
+        this.audioCache.set(key, audio);
+      }
+      
+      // 重置播放位置并播放
+      audio.currentTime = 0;
+      const playPromise = audio.play();
+      
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          console.warn('技能语音播放失败:', error);
+        });
+      }
+      
+      console.log(`🔊 播放技能语音: ${skillElement} (${voiceToUse})`);
+      
+    } catch (error) {
+      console.error('技能语音播放错误:', error);
+    }
+  }
+
+  /**
    * 播放测试音效
    */
   playTestSound(): void {
     // 播放乾卦测试音效
     this.playAudio('sky_sky_qian');
+  }
+
+  /**
+   * 播放技能激活音效
+   */
+  playSkillActivationSound(): void {
+    if (!this.enabled) return;
+    
+    try {
+      // 创建技能激活音效 - 基于五音阶的和弦
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // 五音阶频率 (宫商角徵羽)
+      const frequencies = [261.63, 293.66, 329.63, 392.00, 440.00]; // C D E G A
+      
+      frequencies.forEach((freq, index) => {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.setValueAtTime(freq, audioContext.currentTime);
+        oscillator.type = 'sine';
+        
+        // 音量渐变
+        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(this.volume * 0.3, audioContext.currentTime + 0.1);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.8);
+        
+        // 错开音符
+        const startTime = audioContext.currentTime + index * 0.1;
+        oscillator.start(startTime);
+        oscillator.stop(startTime + 0.8);
+      });
+    } catch (error) {
+      console.warn('技能音效播放失败:', error);
+    }
   }
 
   /**
@@ -167,3 +269,44 @@ class LocalAudioManager {
 }
 
 export const audioManager = new LocalAudioManager();
+
+// 导出便捷函数
+export function playSpecialEndingAudio(type: string): void {
+  if (type === "skill_activation") {
+    audioManager.playSkillActivationSound();
+  }
+}
+
+// 导出技能语音播放函数
+export function playSkillVoice(skillElement: string, voice?: VoiceOption): void {
+  audioManager.playSkillAudio(skillElement, voice);
+}
+
+// 测试技能语音系统
+export function testSkillVoiceSystem(): void {
+  console.log('🎭 测试技能语音系统...');
+  
+  const elements = ['earth', 'sky', 'water', 'fire', 'thunder', 'wind', 'mountain', 'lake'];
+  const voices: VoiceOption[] = ['yunxi', 'xiaoyi'];
+  
+  let testIndex = 0;
+  
+  const playNext = () => {
+    if (testIndex < elements.length * voices.length) {
+      const elementIndex = Math.floor(testIndex / voices.length);
+      const voiceIndex = testIndex % voices.length;
+      const element = elements[elementIndex];
+      const voice = voices[voiceIndex];
+      
+      console.log(`🔊 测试: ${element} - ${voice}`);
+      audioManager.playSkillAudio(element, voice);
+      
+      testIndex++;
+      setTimeout(playNext, 2000); // 2秒间隔
+    } else {
+      console.log('✅ 技能语音系统测试完成');
+    }
+  };
+  
+  playNext();
+}

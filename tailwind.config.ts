@@ -79,10 +79,56 @@ export default {
             height: "0",
           },
         },
+        "skillNameEntrance": {
+          "0%": {
+            transform: "scale(0.3) translateY(100px)",
+            opacity: "0"
+          },
+          "100%": {
+            transform: "scale(1.2) translateY(0)",
+            opacity: "1"
+          }
+        },
+        "skillNameStable": {
+          "0%, 100%": {
+            transform: "scale(1.2)"
+          },
+          "50%": {
+            transform: "scale(1.1)"
+          }
+        },
+        "skillNameExit": {
+          "0%": {
+            transform: "scale(1.2) translateY(0)",
+            opacity: "1"
+          },
+          "100%": {
+            transform: "scale(1.5) translateY(-100px)",
+            opacity: "0"
+          }
+        },
+        "cardFly": {
+          "0%": {
+            transform: "translateY(0) scale(1) rotate(0deg)",
+            opacity: "1"
+          },
+          "50%": {
+            transform: "translateY(-200px) scale(0.8) rotate(180deg)",
+            opacity: "0.8"
+          },
+          "100%": {
+            transform: "translateY(-300px) translateX(calc(50vw - 50%)) scale(0.6) rotate(360deg)",
+            opacity: "0"
+          }
+        }
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "skill-name-entrance": "skillNameEntrance 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)",
+        "skill-name-stable": "skillNameStable 1.2s ease-in-out infinite",
+        "skill-name-exit": "skillNameExit 0.5s ease-in",
+        "card-fly": "cardFly 1.7s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
       },
     },
   },

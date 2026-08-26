@@ -4,7 +4,7 @@ import { Card as UICard } from "@/components/ui/card";
 
 import type { GameState } from "@shared/schema";
 import { useState, useEffect } from "react";
-import { queryClient } from "@/lib/queryClient";
+// Remove unused import
 import { 
   calculatePermanentScoreChanges, 
   applyPermanentScoreChanges, 
@@ -16,6 +16,14 @@ import ScoreChangeAnimation from "./ScoreChangeAnimation";
 import { tryAutoUploadPlayer } from "@/utils/autoUpload";
 import { playVictoryAudio, getVictoryTypeFromResult } from "@/utils/victoryAudio";
 
+// 技能清牌奖励信息接口
+interface SkillBonusInfo {
+  skillName: string;
+  clearedCards: number;
+  bonusScore: number;
+  isSkillClear: boolean;
+}
+
 interface GameCompletionModalProps {
   gameState: GameState;
   onNextRound: () => void;
@@ -23,15 +31,47 @@ interface GameCompletionModalProps {
   currentUserId?: number;
   onSyncRefresh?: () => Promise<void>;
   resetWebSocketState?: () => void;
+  onBackToHome?: () => void;
 }
 
-export default function GameCompletionModal({ gameState, onNextRound, onStartNewGame, currentUserId, onSyncRefresh, resetWebSocketState }: GameCompletionModalProps) {
+export default function GameCompletionModal({ gameState, onNextRound, onStartNewGame, currentUserId, onSyncRefresh, resetWebSocketState, onBackToHome }: GameCompletionModalProps) {
   const [hasAnnounced, setHasAnnounced] = useState(false);
   const [countdown, setCountdown] = useState<number>(30);
   const [isCountdownActive, setIsCountdownActive] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [scoreChanges, setScoreChanges] = useState<PermanentScoreChange[]>([]);
   const [showScoreAnimation, setShowScoreAnimation] = useState(false);
+  const [skillBonusInfo, setSkillBonusInfo] = useState<SkillBonusInfo | null>(null);
+
+  // 检查胜利者是否通过技能清牌
+  const getWinnerDescription = (winner: any) => {
+    // 检查是否有技能清牌信息
+    const skillClearInfo = (window as any).skillClearInfo;
+    
+    if (skillClearInfo && skillClearInfo.playerId === winner.id) {
+      const { skillName, clearedCards, bonusScore } = skillClearInfo;
+      console.log('🎯 技能清牌信息:', skillClearInfo);
+      // 显示技能清牌奖励（每张牌10分）
+      const displayBonus = clearedCards * 10;
+      return `${skillName}清牌(${clearedCards})张+${displayBonus}分`;
+    }
+    
+    // 备用检查：查看技能事件记录
+    const skillEvents = (window as any).lastSkillEvents || [];
+    const playerSkillEvent = skillEvents.find((event: any) => 
+      event.playerId === winner.id && event.bonusInfo?.isSkillClear
+    );
+    
+    if (playerSkillEvent && playerSkillEvent.bonusInfo) {
+      const { skillName, clearedCards, bonusScore } = playerSkillEvent.bonusInfo;
+      console.log('🎯 备用技能事件信息:', playerSkillEvent.bonusInfo);
+      // 显示技能清牌奖励（每张牌10分）  
+      const displayBonus = clearedCards * 10;
+      return `${skillName}清牌(${clearedCards})张+${displayBonus}分`;
+    }
+    
+    return "完美清牌！";
+  };
 
   // Announce game completion - 修复React重新渲染问题
   useEffect(() => {
@@ -76,6 +116,20 @@ export default function GameCompletionModal({ gameState, onNextRound, onStartNew
         setTimeout(() => {
           setShowScoreAnimation(true);
         }, 500);
+        
+        // 🎯 关键修复：结算完成后清理技能清牌信息（延迟清理，确保结算页面能正常显示）
+        setTimeout(() => {
+          // 只在非技能清牌结算或已显示技能信息后清理
+          const winner = gameState.players.find(player => player.cards.length === 0);
+          const skillClearInfo = (window as any).skillClearInfo;
+          
+          // 如果当前不是技能清牌结算，立即清理
+          if (!skillClearInfo || !winner || skillClearInfo.playerId !== winner.id) {
+            (window as any).skillClearInfo = null;
+            (window as any).lastSkillEvents = [];
+            console.log('🧹 非技能清牌结算 - 立即清理技能信息');
+          }
+        }, 2000); // 2秒后清理，确保用户能看到技能奖励信息
       }, 0);
     }
   }, [gameState.status, hasAnnounced, gameState]);
@@ -85,6 +139,10 @@ export default function GameCompletionModal({ gameState, onNextRound, onStartNew
   // 简单清理
   const performFrontendCleanup = () => {
     setHasAnnounced(false);
+    // 🎯 关键修复：清理技能清牌信息，防止在后续结算页面中重复显示
+    (window as any).skillClearInfo = null;
+    (window as any).lastSkillEvents = [];
+    console.log('🧹 已清理技能清牌信息');
   };
 
   // 继续游戏处理 - 带准备按钮功能
@@ -253,7 +311,7 @@ export default function GameCompletionModal({ gameState, onNextRound, onStartNew
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-      <UICard className="bg-gray-800 border-gray-600 p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <UICard className="bg-gray-800 border-gray-600 p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto scrollbar-hide">
         <div className="text-center">
           {isSpecialEnding ? (
             <>
@@ -272,6 +330,50 @@ export default function GameCompletionModal({ gameState, onNextRound, onStartNew
                       🏆 {victoryPlayer.name}{resultMessage}
                     </div>
                     
+                    {/* 🎯 技能清牌信息显示 - 仅在技能清牌胜利时显示 */}
+                    {(() => {
+                      const skillClearInfo = (window as any).skillClearInfo;
+                      const skillEvents = (window as any).lastSkillEvents || [];
+                      
+                      // 检查胜利者是否通过技能清牌获胜
+                      const isVictoryBySkill = (
+                        skillClearInfo && 
+                        skillClearInfo.playerId === victoryPlayer.id && 
+                        skillClearInfo.bonusScore !== undefined
+                      ) || skillEvents.some((event: any) => 
+                        event.playerId === victoryPlayer.id && 
+                        event.bonusInfo?.isSkillClear === true
+                      );
+                      
+                      if (isVictoryBySkill) {
+                        let skillName = "";
+                        let clearedCards = 0;
+                        let displayBonus = 0;
+                        
+                        if (skillClearInfo?.playerId === victoryPlayer.id) {
+                          skillName = skillClearInfo.skillName;
+                          clearedCards = skillClearInfo.clearedCards;
+                          displayBonus = skillClearInfo.displayBonus || (clearedCards * 10);
+                        } else {
+                          const skillEvent = skillEvents.find((event: any) => 
+                            event.playerId === victoryPlayer.id && 
+                            event.bonusInfo?.isSkillClear === true
+                          );
+                          if (skillEvent?.bonusInfo) {
+                            skillName = skillEvent.bonusInfo.skillName;
+                            clearedCards = skillEvent.bonusInfo.clearedCards;
+                            displayBonus = skillEvent.bonusInfo.displayBonus;
+                          }
+                        }
+                        
+                        return (
+                          <div className="text-lg text-green-400 mb-4 animate-pulse">
+                            {skillName}清牌({clearedCards})张+{displayBonus}分
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
 
                   </>
                 )}
@@ -287,7 +389,7 @@ export default function GameCompletionModal({ gameState, onNextRound, onStartNew
                 </div>
                 <div className="text-xl font-bold text-white">{winner.name}</div>
                 <div className="text-sm text-gray-300">
-                  {winner.cardsRemaining === 0 ? "完美清牌！" : `最终得分: ${winner.finalScore}分`}
+                  {winner.cardsRemaining === 0 ? getWinnerDescription(winner) : `最终得分: ${winner.finalScore}分`}
                 </div>
               </div>
             </>
@@ -371,9 +473,74 @@ export default function GameCompletionModal({ gameState, onNextRound, onStartNew
                     )}
                     
                     <div className="text-right">
-                      <div className="text-white font-bold">{player.finalScore}分</div>
+                      {(() => {
+                        // 检查是否是技能清牌玩家（只有真正清牌的才算）
+                        const skillClearInfo = (window as any).skillClearInfo;
+                        const skillEvents = (window as any).lastSkillEvents || [];
+                        
+                        // 检查当前玩家是否通过技能清牌（必须 isSkillClear=true）
+                        const isSkillClearPlayer = (
+                          skillClearInfo && 
+                          skillClearInfo.playerId === player.id && 
+                          skillClearInfo.bonusScore !== undefined // 确保是清牌记录
+                        ) || skillEvents.some((event: any) => 
+                          event.playerId === player.id && 
+                          event.bonusInfo?.isSkillClear === true // 明确检查是否为真正的技能清牌
+                        );
+                        
+                        const scoreColorClass = isSkillClearPlayer ? "text-green-400" : "text-white";
+                        
+                        console.log(`🎨 玩家${player.name}(${player.id}) 分数颜色检查:`, {
+                          skillClearInfo,
+                          relevantSkillEvents: skillEvents.filter((e: any) => e.playerId === player.id),
+                          isSkillClearPlayer,
+                          scoreColorClass
+                        });
+                        
+                        return (
+                          <div className="flex flex-col items-end">
+                            {/* 🎯 排名变化箭头 - 只有技能清牌胜利且排名提升时才显示 */}
+                            <div className="flex items-center space-x-1">
+                              {(() => {
+                                // 只有技能清牌玩家获胜且排名提升时才显示绿色箭头
+                                const shouldShowArrow = isSkillClearPlayer && actualChange > 0 && (
+                                  // 检查是否是真正的胜利者（排名第一且积分为正）
+                                  index === 0 && player.finalScore > 0
+                                );
+                                
+                                return shouldShowArrow ? (
+                                  <span className="text-green-400 text-sm">↑</span>
+                                ) : null;
+                              })()}
+                              <div className={`font-bold ${scoreColorClass}`}>
+                                {player.finalScore}分
+                              </div>
+                            </div>
+                            
+                            {/* 🎯 技能奖励分数显示 - 绿色显示在战斗分位置 */}
+                            {isSkillClearPlayer && (() => {
+                              let skillBonus = 0;
+                              if (skillClearInfo?.playerId === player.id) {
+                                skillBonus = skillClearInfo.displayBonus || (skillClearInfo.clearedCards * 10);
+                              } else {
+                                const skillEvent = skillEvents.find((event: any) => 
+                                  event.playerId === player.id && 
+                                  event.bonusInfo?.isSkillClear === true
+                                );
+                                skillBonus = skillEvent?.bonusInfo?.displayBonus || 0;
+                              }
+                              
+                              return skillBonus > 0 ? (
+                                <div className="text-sm text-green-400 font-medium animate-pulse">
+                                  技能奖励+{skillBonus}
+                                </div>
+                              ) : null;
+                            })()}
+                          </div>
+                        );
+                      })()}
                       <div className="text-xs text-gray-400">
-                        {player.cardsRemaining > 0 ? `剩余${player.cardsRemaining}张牌(-${player.cardsRemaining * 10}分)` : "清牌完成"}
+                        {player.cardsRemaining > 0 ? `剩余${player.cardsRemaining}张牌` : "清牌完成"}
                       </div>
                     </div>
                   </div>
@@ -392,7 +559,7 @@ export default function GameCompletionModal({ gameState, onNextRound, onStartNew
                   {gameState.players.filter(p => !p.isAI).map(player => (
                     <div key={player.id} className="flex items-center space-x-1">
                       <span className="text-white text-sm">{player.name}</span>
-                      <span className={`w-2 h-2 rounded-full ${player.isReady ? 'bg-green-500' : 'bg-gray-500'}`}></span>
+                      <span className={`w-2 h-2 rounded-full bg-gray-500`}></span>
                     </div>
                   ))}
                 </div>
@@ -402,7 +569,7 @@ export default function GameCompletionModal({ gameState, onNextRound, onStartNew
 
 
             {/* Combined Ready Button with Countdown */}
-            <div className="text-center">
+            <div className="text-center space-y-3">
               <Button 
                 onClick={handleReady}
                 disabled={isLoading}
@@ -426,6 +593,24 @@ export default function GameCompletionModal({ gameState, onNextRound, onStartNew
                   </>
                 )}
               </Button>
+              
+              {/* Return to Home Button - Only show on special ending */}
+              {onBackToHome && isSpecialEnding && (
+                <Button 
+                  onClick={() => {
+                    setIsCountdownActive(false);
+                    // 🎯 关键修复：返回首页前清理技能清牌信息
+                    (window as any).skillClearInfo = null;
+                    (window as any).lastSkillEvents = [];
+                    console.log('🧹 返回首页 - 已清理技能清牌信息');
+                    onBackToHome();
+                  }}
+                  variant="outline"
+                  className="bg-gray-600 hover:bg-gray-700 text-white border-gray-500 px-6 py-3 text-base w-full"
+                >
+                  返回首页
+                </Button>
+              )}
               
               {/* Explanation text */}
               <div className="text-sm text-gray-400 mt-2">

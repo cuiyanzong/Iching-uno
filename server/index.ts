@@ -58,7 +58,7 @@ app.get("/api/cards/:id", async (req, res) => {
 app.post("/api/leaderboard/upload", uploadLeaderboard);
 app.get("/api/leaderboard", getLeaderboard);
 app.get("/api/leaderboard/check-device/:deviceId", checkDeviceUploaded);
-app.get("/api/leaderboard/check-player/:playerName", checkPlayerName);
+app.get("/api/leaderboard/check-name/:playerName", checkPlayerName);
 app.put("/api/leaderboard/update/:playerName", updateLeaderboard);
 
 // Start server
@@ -70,6 +70,6 @@ if (process.env.NODE_ENV === "production") {
   setupVite(app, server);
 }
 
-server.listen(PORT, "0.0.0.0", () => {
+server.listen(Number(PORT), "0.0.0.0", () => {
   log(`Server running on port ${PORT}`);
 });

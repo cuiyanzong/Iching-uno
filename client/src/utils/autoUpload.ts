@@ -131,8 +131,11 @@ function convertToUploadData(playerData: PermanentScoreData): LeaderboardUploadD
     deviceId: getDeviceId(), // 🔑 关键修复：添加设备ID
     totalScore: playerData.totalScore,
     gamesPlayed: playerData.gamesPlayed,
+    roundsPlayed: playerData.roundsPlayed,
     wins: playerData.wins,
     defeats: playerData.defeats,
+    draws: playerData.draws || 0,
+    clearCards: playerData.clearCards,
     smallWins: playerData.achievements.smallWins,
     doubleKills: playerData.achievements.doubleKills,
     quadKills: playerData.achievements.quadKills,

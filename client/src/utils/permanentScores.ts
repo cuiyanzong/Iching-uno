@@ -9,14 +9,16 @@ export interface PermanentScoreData {
   playerId: string;
   playerName: string;
   totalScore: number;
-  gamesPlayed: number;
-  wins: number;
-  defeats: number;
-  clearCards: number;   // 清牌次数
+  gamesPlayed: number;      // 完整游戏局数（特殊结算）
+  roundsPlayed: number;     // 总回合数（包括普通回合）
+  wins: number;             // 获胜游戏局数
+  defeats: number;          // 失败游戏局数
+  draws?: number;           // 平局游戏局数（可选，向后兼容）
+  clearCards: number;       // 清牌次数
   achievements: {
-    smallWins: number;    // 小胜一局次数
-    doubleKills: number;  // 一箭双雕次数
-    quadKills: number;    // 团灭次数
+    smallWins: number;      // 小胜一局次数
+    doubleKills: number;    // 一箭双雕次数
+    quadKills: number;      // 团灭次数
   };
   scoreHistory: ScoreHistoryRecord[];
   lastPlayed: number;
@@ -52,12 +54,186 @@ export const SCORE_CHANGES = {
 const PERMANENT_SCORES_KEY = 'hexagram_uno_permanent_scores';
 
 /**
+ * 数据迁移函数 - 确保向后兼容并修复旧数据
+ */
+function migratePlayerData(data: any): PermanentScoreData {
+  // 如果数据缺少新字段，需要重新分析历史记录
+  if (typeof data.roundsPlayed === 'undefined') {
+    const analysisResult = analyzePlayerHistory(data);
+    
+    return {
+      playerId: data.playerId || '',
+      playerName: data.playerName || '',
+      totalScore: data.totalScore || 0,
+      gamesPlayed: analysisResult.realGamesPlayed,     // 修正后的真实游戏局数
+      roundsPlayed: analysisResult.totalRoundsPlayed, // 总回合数
+      wins: analysisResult.realWins,                  // 修正后的胜利局数
+      defeats: data.defeats || 0,
+      draws: data.draws || 0,
+      clearCards: data.clearCards || 0,
+      achievements: {
+        smallWins: data.achievements?.smallWins || 0,
+        doubleKills: data.achievements?.doubleKills || 0,
+        quadKills: data.achievements?.quadKills || 0,
+      },
+      scoreHistory: data.scoreHistory || [],
+      lastPlayed: data.lastPlayed || Date.now(),
+    };
+  }
+  
+  // 如果已有新字段，直接返回
+  return {
+    playerId: data.playerId || '',
+    playerName: data.playerName || '',
+    totalScore: data.totalScore || 0,
+    gamesPlayed: data.gamesPlayed || 0,
+    roundsPlayed: data.roundsPlayed || 0,
+    wins: data.wins || 0,
+    defeats: data.defeats || 0,
+    draws: data.draws || 0,
+    clearCards: data.clearCards || 0,
+    achievements: {
+      smallWins: data.achievements?.smallWins || 0,
+      doubleKills: data.achievements?.doubleKills || 0,
+      quadKills: data.achievements?.quadKills || 0,
+    },
+    scoreHistory: data.scoreHistory || [],
+    lastPlayed: data.lastPlayed || Date.now(),
+  };
+}
+
+/**
+ * 分析玩家历史记录，区分真实游戏局数和回合数
+ */
+function analyzePlayerHistory(data: any): {
+  realGamesPlayed: number;
+  totalRoundsPlayed: number;
+  realWins: number;
+} {
+  const history = data.scoreHistory || [];
+  let realGamesPlayed = 0;
+  let totalRoundsPlayed = 0;
+  let realWins = 0;
+  
+  // 分析历史记录，区分特殊结算和普通回合
+  history.forEach((record: any) => {
+    totalRoundsPlayed++; // 每个记录都代表一个回合
+    
+    // 只有特殊结算（有输赢判定）才算"局"
+    // 判定标准：积分有变化 AND 包含特殊结算关键词
+    const hasScoreChange = record.change && record.change !== 0;
+    const hasSpecialReason = record.reason && (
+      record.reason.includes('小胜一局') ||
+      record.reason.includes('一箭双雕') ||
+      record.reason.includes('大杀四方') ||
+      record.reason.includes('团灭') ||
+      record.reason.includes('遗憾败北')
+    );
+    
+    // 只有同时满足积分变化和特殊结算关键词才算"局"
+    if (hasScoreChange && hasSpecialReason) {
+      realGamesPlayed++;
+      
+      // 如果是正分变化，说明是胜利
+      if (record.change > 0) {
+        realWins++;
+      }
+    }
+  });
+  
+  // 对于没有历史记录的旧数据，使用现有的胜负数据
+  if (history.length === 0) {
+    // 优先使用直接的胜负平数据
+    const existingWins = data.wins || 0;
+    const existingDefeats = data.defeats || 0;
+    const existingDraws = data.draws || 0;
+    
+    if (existingWins > 0 || existingDefeats > 0 || existingDraws > 0) {
+      realGamesPlayed = existingWins + existingDefeats + existingDraws;
+      realWins = existingWins;
+      totalRoundsPlayed = data.gamesPlayed || realGamesPlayed; // 旧数据的gamesPlayed实际上是回合数
+    } else if (data.achievements) {
+      // 如果没有直接的胜负数据，使用成就数据估算
+      const achievements = data.achievements;
+      realGamesPlayed = (achievements.smallWins || 0) + (achievements.doubleKills || 0) + (achievements.quadKills || 0) + (data.defeats || 0);
+      realWins = (achievements.smallWins || 0) + (achievements.doubleKills || 0) + (achievements.quadKills || 0);
+      totalRoundsPlayed = data.gamesPlayed || 0; // 旧数据的gamesPlayed实际上是回合数
+    }
+  } else {
+    // 有历史记录的情况，还要考虑原有的胜负平数据
+    const existingWins = data.wins || 0;
+    const existingDefeats = data.defeats || 0;
+    const existingDraws = data.draws || 0;
+    const existingGamesFromRecord = existingWins + existingDefeats + existingDraws;
+    
+    // 如果原有的胜负平局数大于历史记录分析的结果，使用原有数据
+    if (existingGamesFromRecord > realGamesPlayed) {
+      realGamesPlayed = existingGamesFromRecord;
+      realWins = existingWins;
+      // 回合数至少应该等于游戏局数
+      if (totalRoundsPlayed < realGamesPlayed) {
+        totalRoundsPlayed = realGamesPlayed;
+      }
+    }
+  }
+  
+  // 确保数据合理性
+  if (realWins > realGamesPlayed) {
+    realGamesPlayed = realWins + (data.defeats || 0);
+  }
+  
+  if (totalRoundsPlayed < realGamesPlayed) {
+    totalRoundsPlayed = realGamesPlayed;
+  }
+  
+  console.log(`📊 数据分析结果 ${data.playerName}:`, {
+    原始局数: data.gamesPlayed || 0,
+    原始胜数: data.wins || 0,
+    原始负数: data.defeats || 0,
+    原始平数: data.draws || 0,
+    修正后游戏局数: realGamesPlayed,
+    总回合数: totalRoundsPlayed,
+    修正后胜利局数: realWins,
+    历史记录数: history.length
+  });
+  
+  return {
+    realGamesPlayed,
+    totalRoundsPlayed,
+    realWins
+  };
+}
+
+/**
  * 获取所有永久积分数据
  */
 export function getPermanentScores(): Record<string, PermanentScoreData> {
   try {
     const data = localStorage.getItem(PERMANENT_SCORES_KEY);
-    return data ? JSON.parse(data) : {};
+    if (!data) return {};
+    
+    const rawData = JSON.parse(data);
+    const migratedData: Record<string, PermanentScoreData> = {};
+    
+    // 迁移所有玩家数据
+    for (const [key, value] of Object.entries(rawData)) {
+      const migrated = migratePlayerData(value as any);
+      migratedData[key] = migrated;
+      
+      // 自动保存迁移结果
+      if (typeof (value as any).roundsPlayed === 'undefined') {
+        console.log(`🔄 自动迁移玩家数据: ${migrated.playerName}`);
+      }
+    }
+    
+    // 如果有数据被迁移，自动保存
+    const hasNewMigration = Object.values(rawData).some((v: any) => typeof v.roundsPlayed === 'undefined');
+    if (hasNewMigration) {
+      localStorage.setItem(PERMANENT_SCORES_KEY, JSON.stringify(migratedData));
+      console.log('✅ 数据迁移已自动保存');
+    }
+    
+    return migratedData;
   } catch (error) {
     console.error('读取永久积分数据失败:', error);
     return {};
@@ -83,7 +259,8 @@ export function createPlayerData(playerId: string, playerName: string): Permanen
     playerId,
     playerName,
     totalScore: 0, // 新玩家默认0分
-    gamesPlayed: 0,
+    gamesPlayed: 0,        // 完整游戏局数
+    roundsPlayed: 0,       // 总回合数
     wins: 0,
     defeats: 0,
     clearCards: 0,
@@ -178,11 +355,19 @@ function calculateSpecialEndingChanges(gameState: GameState, eliminatedPlayers: 
   const maxScore = Math.max(...gameState.players.map(p => p.score));
   const winners = gameState.players.filter(p => p.score === maxScore && p.score > 0);
 
+  // 计算负分奖励机制
+  const negativePlayers = gameState.players.filter(p => p.score < 0);
+  const negativeScoreBonus = negativePlayers.reduce((sum, p) => sum + Math.abs(p.score), 0);
+  const nonNegativePlayers = gameState.players.filter(p => p.score >= 0);
+
   console.log('🎯 特殊结算积分计算:', {
     所有玩家分数: gameState.players.map(p => ({ 姓名: p.name, 分数: p.score })),
     最高分数: maxScore,
     胜利者: winners.map(w => ({ 姓名: w.name, 分数: w.score, ID: w.id })),
-    淘汰玩家数: eliminatedPlayers.length
+    淘汰玩家数: eliminatedPlayers.length,
+    负分玩家: negativePlayers.map(p => ({ 姓名: p.name, 分数: p.score })),
+    负分奖励总额: negativeScoreBonus,
+    非负分玩家数: nonNegativePlayers.length
   });
 
   const changes: PermanentScoreChange[] = [];
@@ -216,11 +401,18 @@ function calculateSpecialEndingChanges(gameState: GameState, eliminatedPlayers: 
     let scoreChange = 0;
     let reason = '';
     
-    // 检查是否是胜利者（可能有多个同分胜利者）
+    // 1. 计算积分变化（新的负分奖励机制）
     const isWinner = winners.some(w => w.id === player.id);
+    const isNegativeScore = player.score < 0;
+    const isNonNegativeScore = player.score >= 0;
     
-    if (isWinner) {
-      // 胜利者获得积分
+    if (isNegativeScore) {
+      // 负分玩家：-100基础扣分 + 战斗负分绝对值
+      const negativeScorePenalty = Math.abs(player.score);
+      scoreChange = SCORE_CHANGES.DEFEAT + (-negativeScorePenalty);
+      reason = `基础淘汰-100分加战斗负分${player.score}`;
+    } else if (isWinner) {
+      // 胜利者获得基础积分 + 负分奖励
       const eliminatedCount = eliminatedPlayers.length;
       if (eliminatedCount === 1) {
         scoreChange = SCORE_CHANGES.SMALL_WIN;
@@ -232,10 +424,19 @@ function calculateSpecialEndingChanges(gameState: GameState, eliminatedPlayers: 
         scoreChange = SCORE_CHANGES.QUAD_KILL;
         reason = '大杀四方';
       }
-    } else if (player.score <= 0) {
-      // 失败者扣分
+      
+      // 胜利者额外获得负分奖励
+      if (negativeScoreBonus > 0) {
+        scoreChange += negativeScoreBonus;
+      }
+    } else if (player.score === 0) {
+      // 0分被淘汰玩家：直接扣100分，0分不是负分不获得负分奖励
       scoreChange = SCORE_CHANGES.DEFEAT;
       reason = '分数清零';
+    } else if (isNonNegativeScore && negativeScoreBonus > 0) {
+      // 非负分非胜利玩家：只获得负分奖励
+      scoreChange = negativeScoreBonus;
+      reason = '参与游戏';
     }
     
     if (scoreChange !== 0) {
@@ -263,18 +464,41 @@ function calculateSpecialEndingChanges(gameState: GameState, eliminatedPlayers: 
       
       console.log(`💰 ${player.name} 积分变化计算:`, {
         基准积分: baseScore,
-        积分变化: scoreChange,
+        战斗分: player.score,
+        基础积分变化: isWinner ? (reason === '小胜一局' ? 100 : reason === '一箭双雕' ? 200 : 300) : (player.score <= 0 ? -100 : 0),
+        负分奖励: isNonNegativeScore ? negativeScoreBonus : 0,
+        负分扣除: isNegativeScore ? Math.abs(player.score) : 0,
+        总积分变化: scoreChange,
         新积分: newScore,
         实际变化: actualChange,
         原因: reason
       });
       
+      // 🔑 修复显示问题：为负分扣分显示正确的数值
+      let displayChange = scoreChange;
+      
+      // 对于负分玩家，确保显示正确的扣分数值
+      if (isNegativeScore) {
+        // 显示：基础扣分 + 战斗负分绝对值
+        const basePenalty = SCORE_CHANGES.DEFEAT; // -100
+        const battlePenalty = Math.abs(player.score); // 战斗负分绝对值
+        displayChange = basePenalty - battlePenalty; // -100 - |负分| = 总扣分
+        
+        console.log(`🔍 负分显示修复 ${player.name}:`, {
+          战斗分: player.score,
+          基础扣分: basePenalty,
+          战斗负分绝对值: battlePenalty,
+          显示变化: displayChange,
+          原始计算: scoreChange
+        });
+      }
+
       changes.push({
         playerId,
         playerName: player.name,
         oldScore: baseScore,
         newScore,
-        change: actualChange,
+        change: displayChange,
         reason,
       });
     }
@@ -329,12 +553,12 @@ export function applyPermanentScoreChanges(changes: PermanentScoreChange[]): Rec
     // 更新总积分 - 重要：不要重复计算积分
     console.log(`📊 更新 ${playerName} 积分: ${playerData.totalScore} → ${newScore}`);
     playerData.totalScore = newScore;
-    playerData.gamesPlayed += 1;
     playerData.lastPlayed = Date.now();
     
-    // 更新胜负记录
+    // 更新统计数据
     if (scoreChange > 0) {
       playerData.wins += 1;
+      playerData.gamesPlayed += 1;  // 完整游戏局数
       
       // 更新成就
       if (scoreChange === SCORE_CHANGES.SMALL_WIN) {
@@ -346,12 +570,17 @@ export function applyPermanentScoreChanges(changes: PermanentScoreChange[]): Rec
       }
     } else if (scoreChange < 0) {
       playerData.defeats += 1;
+      playerData.gamesPlayed += 1;  // 完整游戏局数
     } else if (scoreChange === 0) {
       // 处理积分无变化的情况（清牌次数）
       if (reason === '清牌获胜') {
         playerData.clearCards += 1;
+        // 清牌获胜不增加游戏局数，这是普通回合
       }
     }
+    
+    // 所有参与的回合都增加回合数
+    playerData.roundsPlayed += 1;
     
     // 记录历史
     playerData.scoreHistory.push({
@@ -392,7 +621,22 @@ export function getLeaderboard(): PermanentScoreData[] {
   const scores = getPermanentScores();
   
   return Object.values(scores)
-    .sort((a, b) => b.totalScore - a.totalScore)
+    .sort((a, b) => {
+      // 第一优先级：积分越高排名越高
+      if (a.totalScore !== b.totalScore) {
+        return b.totalScore - a.totalScore;
+      }
+      
+      // 第二优先级：胜率越高排名越高
+      const aWinRate = a.gamesPlayed > 0 ? a.wins / a.gamesPlayed : 0;
+      const bWinRate = b.gamesPlayed > 0 ? b.wins / b.gamesPlayed : 0;
+      if (aWinRate !== bWinRate) {
+        return bWinRate - aWinRate;
+      }
+      
+      // 第三优先级：回合数越少排名越高
+      return a.roundsPlayed - b.roundsPlayed;
+    })
     .slice(0, 10); // 只取前10名
 }
 
@@ -469,4 +713,71 @@ export function initializePlayerScore(playerName: string): void {
   
   savePermanentScores(currentScores);
   console.log(`✅ 为玩家 ${playerName} 创建了新的积分记录: 0分起始`);
+}
+
+/**
+ * 数据修复工具 - 重新分析所有玩家数据
+ */
+export function fixAllPlayerData(): void {
+  const rawData = localStorage.getItem(PERMANENT_SCORES_KEY);
+  if (!rawData) {
+    console.log('❌ 没有找到积分数据');
+    return;
+  }
+  
+  const data = JSON.parse(rawData);
+  const fixedData: Record<string, PermanentScoreData> = {};
+  
+  console.log('🔧 开始修复所有玩家数据...');
+  
+  Object.entries(data).forEach(([key, value]) => {
+    console.log(`\n🔍 正在分析玩家: ${key}`);
+    
+    // 强制重新分析历史数据
+    const playerData = value as any;
+    const analysisResult = analyzePlayerHistory(playerData);
+    
+    fixedData[key] = {
+      playerId: playerData.playerId || key,
+      playerName: playerData.playerName || '',
+      totalScore: playerData.totalScore || 0,
+      gamesPlayed: analysisResult.realGamesPlayed,
+      roundsPlayed: analysisResult.totalRoundsPlayed,
+      wins: analysisResult.realWins,
+      defeats: playerData.defeats || 0,
+      clearCards: playerData.clearCards || 0,
+      achievements: {
+        smallWins: playerData.achievements?.smallWins || 0,
+        doubleKills: playerData.achievements?.doubleKills || 0,
+        quadKills: playerData.achievements?.quadKills || 0,
+      },
+      scoreHistory: playerData.scoreHistory || [],
+      lastPlayed: playerData.lastPlayed || Date.now(),
+    };
+    
+    console.log(`✅ 修复完成: 游戏局数 ${analysisResult.realGamesPlayed}, 回合数 ${analysisResult.totalRoundsPlayed}, 胜利数 ${analysisResult.realWins}`);
+  });
+  
+  savePermanentScores(fixedData);
+  console.log('\n🎉 所有玩家数据修复完成！');
+}
+
+/**
+ * 调试工具 - 显示玩家数据分析结果
+ */
+export function debugPlayerData(): void {
+  const scores = getPermanentScores();
+  
+  console.log('\n📊 当前玩家数据分析:');
+  Object.entries(scores).forEach(([key, data]) => {
+    const winRate = data.gamesPlayed > 0 ? (data.wins / data.gamesPlayed * 100).toFixed(1) : '0.0';
+    console.log(`\n👤 ${data.playerName} (${key}):`);
+    console.log(`  积分: ${data.totalScore}`);
+    console.log(`  游戏局数: ${data.gamesPlayed}`);
+    console.log(`  回合数: ${data.roundsPlayed}`);
+    console.log(`  胜利数: ${data.wins}`);
+    console.log(`  胜率: ${winRate}%`);
+    console.log(`  清牌次数: ${data.clearCards}`);
+    console.log(`  历史记录: ${data.scoreHistory.length}条`);
+  });
 }

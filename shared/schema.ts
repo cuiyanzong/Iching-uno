@@ -29,6 +29,8 @@ export const gameCards = pgTable("game_cards", {
   type: text("type").notNull().default("normal"), // normal, reverse
   color: text("color").notNull(), // primary color
   description: text("description"),
+  divination: text("divination"), // 卦辞，如"乾为天，君子以自强不息"
+  interpretation: text("interpretation"), // 简短解释/寓意
 });
 
 export const globalLeaderboard = pgTable("global_leaderboard", {
@@ -37,8 +39,10 @@ export const globalLeaderboard = pgTable("global_leaderboard", {
   deviceId: text("device_id").notNull(),
   totalScore: integer("total_score").notNull().default(0),
   gamesPlayed: integer("games_played").notNull().default(0),
+  roundsPlayed: integer("rounds_played").notNull().default(0),
   wins: integer("wins").notNull().default(0),
   defeats: integer("defeats").notNull().default(0),
+  draws: integer("draws").notNull().default(0),
   clearCards: integer("clear_cards").notNull().default(0),
   smallWins: integer("small_wins").notNull().default(0),
   doubleKills: integer("double_kills").notNull().default(0),
@@ -84,6 +88,7 @@ export type Player = {
   score: number;
   isAI: boolean;
   userId?: number; // For real players
+  socketId?: string; // For websocket connection tracking
 };
 
 export type GameMode = "single";
@@ -120,6 +125,7 @@ export type GameState = {
   round: number;
   maxPlayers: number;
   aiActionStatus?: string; // Display AI action status like "阿豪抽牌", "老宋出牌"
+  notifications?: GameNotification[]; // 游戏通知数组
   // AI助手状态 - 简化版本
   aiAssistant?: {
     active: boolean;           // AI助手是否激活

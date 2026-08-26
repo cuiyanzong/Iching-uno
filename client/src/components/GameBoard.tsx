@@ -5,10 +5,14 @@ import CentralArea from "./CentralArea";
 import GameCompletionModal from "./GameCompletionModal";
 // DirectionChangeNotification 已移动到父组件处理
 import VoiceSelector from "./VoiceSelector";
+import SkillContainer from "./SkillContainer";
+import SkillAnimation from "./SkillAnimation";
+
 import { Volume2, VolumeX, RefreshCw, Home } from "lucide-react";
 
-import type { GameState } from "@shared/schema";
+import type { GameState, Element } from "@shared/schema";
 import { useState, useEffect, memo } from "react";
+import { audioManager } from "@/lib/localAudio";
 
 interface GameBoardProps {
   gameState: GameState;
@@ -24,6 +28,9 @@ interface GameBoardProps {
   resetWebSocketState?: () => void;
   onBackToHome?: () => void;
   isLocalGame?: boolean;
+  // 技能系统相关
+  battleStyle?: string;
+  onSkillTrigger?: (element: Element) => void;
 }
 
 export default memo(function GameBoard({
@@ -40,7 +47,17 @@ export default memo(function GameBoard({
   resetWebSocketState,
   onBackToHome,
   isLocalGame = false,
+  battleStyle,
+  onSkillTrigger,
 }: GameBoardProps) {
+
+  // Helper function to get player position based on player index
+  const getPlayerPosition = (playerId: number): 'top' | 'left' | 'right' | 'bottom' => {
+    const playerIndex = gameState.players.findIndex(p => p.id === playerId);
+    // 正确的位置映射：索引0=bottom, 索引1=right, 索引2=top, 索引3=left
+    const positions: ('top' | 'left' | 'right' | 'bottom')[] = ['bottom', 'right', 'top', 'left'];
+    return positions[playerIndex] || 'bottom';
+  };
   const currentPlayer = gameState.players[gameState.currentPlayer];
   // Find the user's player
   const userPlayer = gameState.players.find(
@@ -71,6 +88,65 @@ export default memo(function GameBoard({
 
   // Audio state
   const [audioEnabled, setAudioEnabled] = useState(true);
+  
+  // Skill animation state
+  const [skillAnimationData, setSkillAnimationData] = useState<{
+    isActive: boolean;
+    element: Element | null;
+    consumedCards: string[];
+    animationKey: number;
+    sourcePosition: 'top' | 'left' | 'right' | 'bottom';
+  }>({
+    isActive: false,
+    element: null,
+    consumedCards: [],
+    animationKey: 0,
+    sourcePosition: 'bottom'
+  });
+
+  useEffect(() => {
+    // 监听技能使用事件
+    const handleSkillUsed = (event: CustomEvent) => {
+      const { element, cardIds, playerId } = event.detail;
+      console.log('🎭 收到技能使用事件:', element, cardIds, 'playerId:', playerId);
+      
+      // 🔊 播放技能语音（包括AI玩家）
+      audioManager.playSkillAudio(element);
+      console.log(`🔊 播放技能语音: ${element} (${audioManager.getVoice()})`);
+      
+      // 获取触发技能的玩家位置
+      const sourcePosition = playerId ? getPlayerPosition(playerId) : 'bottom';
+      console.log('🎭 技能源位置:', sourcePosition);
+      
+      setSkillAnimationData(prev => ({
+        isActive: true,
+        element,
+        consumedCards: cardIds,
+        animationKey: prev.animationKey + 1,
+        sourcePosition
+      }));
+    };
+
+    // 监听强制清理动画事件
+    const handleClearAnimation = () => {
+      console.log('🎭 强制清理技能动画状态');
+      setSkillAnimationData({
+        isActive: false,
+        element: null,
+        consumedCards: [],
+        animationKey: 0,
+        sourcePosition: 'bottom'
+      });
+    };
+
+    window.addEventListener('skillUsed', handleSkillUsed as EventListener);
+    window.addEventListener('clearSkillAnimation', handleClearAnimation as EventListener);
+    
+    return () => {
+      window.removeEventListener('skillUsed', handleSkillUsed as EventListener);
+      window.removeEventListener('clearSkillAnimation', handleClearAnimation as EventListener);
+    };
+  }, []);
 
   useEffect(() => {
     // 音频现在直接在Card组件中处理
@@ -121,49 +197,58 @@ export default memo(function GameBoard({
         <VoiceSelector />
       </div>
 
-      <div className="h-screen flex items-center justify-center p-6 relative z-10">
+      <div className="h-screen flex items-center justify-center p-2 sm:p-4 md:p-6 relative z-10">
         {/* Top Player */}
         {topPlayer && (
-          <PlayerArea
-            player={topPlayer}
-            position="top"
-            isCurrentPlayer={
-              gameState.currentPlayer ===
-              gameState.players.findIndex((p) => p.id === topPlayer.id)
-            }
-          />
+          <div className="absolute top-6 left-1/2 transform -translate-x-1/2 skill-position-top">
+            <PlayerArea
+              player={topPlayer}
+              position="top"
+              isCurrentPlayer={
+                gameState.currentPlayer ===
+                gameState.players.findIndex((p) => p.id === topPlayer.id)
+              }
+            />
+
+          </div>
         )}
 
         {/* Left Player */}
         {leftPlayer && (
-          <PlayerArea
-            player={leftPlayer}
-            position="left"
-            isCurrentPlayer={
-              gameState.currentPlayer ===
-              gameState.players.findIndex((p) => p.id === leftPlayer.id)
-            }
-          />
+          <div className="absolute left-1 sm:left-2 md:left-4 lg:left-6 top-1/2 transform -translate-y-1/2 skill-position-left">
+            <PlayerArea
+              player={leftPlayer}
+              position="left"
+              isCurrentPlayer={
+                gameState.currentPlayer ===
+                gameState.players.findIndex((p) => p.id === leftPlayer.id)
+              }
+            />
+
+          </div>
         )}
 
         {/* Right Player */}
         {rightPlayer && (
-          <PlayerArea
-            player={rightPlayer}
-            position="right"
-            isCurrentPlayer={
-              gameState.currentPlayer ===
-              gameState.players.findIndex((p) => p.id === rightPlayer.id)
-            }
-          />
+          <div className="absolute right-1 sm:right-2 md:right-4 lg:right-6 top-1/2 transform -translate-y-1/2 skill-position-right">
+            <PlayerArea
+              player={rightPlayer}
+              position="right"
+              isCurrentPlayer={
+                gameState.currentPlayer ===
+                gameState.players.findIndex((p) => p.id === rightPlayer.id)
+              }
+            />
+
+          </div>
         )}
 
         {/* Central Game Area - Moved Up */}
-        <div className="flex-1 max-w-lg mx-8 -mt-16">
+        <div className="flex-1 max-w-lg mx-4 sm:mx-6 md:mx-8 -mt-16">
           {/* 方向变化通知已移动到父组件LocalGame.tsx */}
 
           {/* Centered Card Area */}
-          <div className="flex flex-col items-center space-y-3">
+          <div className="flex flex-col items-center space-y-2 sm:space-y-3">
             <CentralArea
               currentCard={gameState.currentCard}
               deckCount={gameState.deck.length}
@@ -209,7 +294,7 @@ export default memo(function GameBoard({
         </div>
 
         {/* Bottom Player - Show current user's player */}
-        <div className="absolute bottom-20 md:bottom-6 left-1/2 transform -translate-x-1/2 w-full max-w-4xl px-6">
+        <div className="absolute bottom-20 md:bottom-6 left-1/2 transform -translate-x-1/2 w-full max-w-4xl px-2 sm:px-4 md:px-6 skill-position-bottom">
           {userPlayer && (
             <>
               <PlayerArea
@@ -222,6 +307,7 @@ export default memo(function GameBoard({
                 onPlayCard={onPlayCard}
                 isPlayingCard={isPlayingCard}
               />
+
               {/* Player info below cards */}
               <div className="text-center mt-3">
                 <div className="flex items-center justify-center space-x-3">
@@ -234,11 +320,49 @@ export default memo(function GameBoard({
                     {userPlayer.score}分
                   </span>
                 </div>
+                
+                {/* 技能容器 - 在玩家名字下方 */}
+                {gameState.currentCard && onSkillTrigger && (
+                  <div className="mt-2 flex justify-center">
+                    <SkillContainer
+                      playerCards={userPlayer.cards || []}
+                      currentCard={gameState.currentCard}
+                      onSkillTrigger={onSkillTrigger}
+                      isPlayerTurn={
+                        gameState.currentPlayer ===
+                        gameState.players.findIndex((p) => p.id === userPlayer.id)
+                      }
+                      disabled={isPlayingCard || isDrawingCard}
+                    />
+                  </div>
+                )}
               </div>
             </>
           )}
         </div>
       </div>
+
+      {/* Skill Animation Overlay */}
+      {skillAnimationData.element && skillAnimationData.isActive && (
+        <SkillAnimation
+          key={skillAnimationData.animationKey}
+          isVisible={skillAnimationData.isActive}
+          skillName=""
+          element={skillAnimationData.element}
+          cardIds={skillAnimationData.consumedCards}
+          sourcePosition={skillAnimationData.sourcePosition}
+          onComplete={() => {
+            console.log('🎭 技能动画完成，重置状态');
+            setSkillAnimationData({
+              isActive: false,
+              element: null,
+              consumedCards: [],
+              animationKey: 0,
+              sourcePosition: 'bottom'
+            });
+          }}
+        />
+      )}
 
       {/* Game Completion Modal - Removed, handled by parent component */}
       {/* 

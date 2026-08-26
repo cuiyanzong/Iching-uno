@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 汉仪颜楷繁字体 - 技能动画专用，iPad兼容优化 */
+@font-face {
+  font-family: 'HanYiYanKai';
+  src: url('/fonts/HanYiYanKai.woff2') format('woff2'),
+       url('/fonts/HanYiYanKai.TTF') format('truetype');
+  font-display: block;
+  font-weight: normal;
+  font-style: normal;
+}
+
+/* 强制字体预加载 - 隐藏元素触发字体下载 */
+.font-preloader {
+  font-family: 'HanYiYanKai', serif;
+  position: absolute;
+  visibility: hidden;
+  z-index: -1;
+  pointer-events: none;
+}
+
 :root {
   --background: hsl(0, 0%, 0%);
   --foreground: hsl(0, 0%, 98%);
@@ -25,8 +44,8 @@
   --radius: 0.5rem;
 
   /* Game specific colors */
-  --game-bg: linear-gradient(135deg, hsl(240, 100%, 5%) 0%, hsl(260, 80%, 8%) 25%, hsl(280, 60%, 12%) 50%, hsl(240, 50%, 15%) 75%, hsl(220, 40%, 18%) 100%);
-  --game-bg-pattern: none;
+  --game-bg: linear-gradient(135deg, hsl(240, 100%, 5%) 0%, hsl(260, 80%, 8%) 25%, hsl(280, 60%, 12%) 50%, hsl(240, 50%, 15%) 75%, hsl(220, 40%, 18%) 100%), url('@assets/sixty-four-hexagrams_1750658246553.png');
+  --game-bg-pattern: url('@assets/sixty-four-hexagrams_1750658246553.png');
   --card-fire: hsl(0, 84%, 47%);
   --card-water: hsl(217, 91%, 60%);
   --card-mountain: hsl(142, 71%, 45%);
@@ -35,6 +54,17 @@
   --card-sky: hsl(0, 0%, 100%);
   --card-thunder: hsl(45, 93%, 47%);
   --card-wind: hsl(188, 83%, 40%);
+}
+
+/* 隐藏滚动条的实用类 */
+.scrollbar-hide {
+  /* 隐藏webkit浏览器滚动条 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
 }
 
 /* Custom animations */
@@ -167,9 +197,12 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.05) 0%, transparent 50%),
-              radial-gradient(circle at 70% 70%, rgba(255, 255, 255, 0.03) 0%, transparent 50%);
+  background-image: url('/attached_assets/sixty-four-hexagrams_1750658246553.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   opacity: 0.1;
+  filter: invert(1);
   pointer-events: none;
   z-index: 0;
   mix-blend-mode: overlay;
@@ -337,5 +370,50 @@
   .card-stacked {
     position: absolute;
     transition: all 0.02s ease;
+  }
+  
+  /* Skill Animation Utilities */
+  .human-player-area {
+    position: relative;
+  }
+
+  .game-table-center {
+    position: relative;
+  }
+
+  /* Background gradient radial for skill effects */
+  .bg-gradient-radial {
+    background: radial-gradient(circle, var(--tw-gradient-stops));
+  }
+  
+  /* Scrollbar hiding utilities */
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;     /* Firefox */
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;             /* Chrome, Safari, Opera */
+  }
+  
+  /* Skill animation keyframes */
+  @keyframes twinkle {
+    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.2); }
+  }
+  
+  @keyframes skillCardFly {
+    0% { 
+      transform: translateY(0) scale(1) rotate(0deg); 
+      filter: blur(0px); 
+    }
+    50% { 
+      transform: translateY(-20px) scale(1.1) rotate(5deg); 
+      filter: blur(0.5px); 
+    }
+    100% { 
+      transform: translateY(0) scale(0.8) rotate(0deg); 
+      filter: blur(1px); 
+    }
   }
 }

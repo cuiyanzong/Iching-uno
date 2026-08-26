@@ -45,14 +45,39 @@ export default function Leaderboard({ onClose }: LeaderboardProps) {
     }
   };
 
-  const formatWinRate = (wins: number, gamesPlayed: number) => {
-    if (gamesPlayed === 0) return '0%';
-    return `${Math.round((wins / gamesPlayed) * 100)}%`;
+  const formatWinRate = (wins: number, gamesPlayed: number, defeats: number = 0, draws: number = 0) => {
+    // 总游戏局数 = 胜 + 负 + 平
+    const totalGames = wins + defeats + draws;
+    if (totalGames === 0) return '0%';
+    return `${Math.round((wins / totalGames) * 100)}%`;
   };
+
+  // 新的排名规则：积分 > 胜率 > 回合数（越少越好）
+  const sortedLeaderboard = [...globalLeaderboard].sort((a, b) => {
+    // 第一优先级：积分越高排名越高
+    if (a.totalScore !== b.totalScore) {
+      return b.totalScore - a.totalScore;
+    }
+    
+    // 第二优先级：胜率越高排名越高
+    // 总游戏局数 = 胜 + 负 + 平
+    const aTotalGames = a.wins + a.defeats + (a.draws || 0);
+    const bTotalGames = b.wins + b.defeats + (b.draws || 0);
+    const aWinRate = aTotalGames > 0 ? a.wins / aTotalGames : 0;
+    const bWinRate = bTotalGames > 0 ? b.wins / bTotalGames : 0;
+    if (Math.abs(aWinRate - bWinRate) > 0.001) { // 使用小数容差
+      return bWinRate - aWinRate;
+    }
+    
+    // 第三优先级：回合数越少排名越高
+    const aRounds = a.roundsPlayed || aTotalGames || 0; // 向后兼容
+    const bRounds = b.roundsPlayed || bTotalGames || 0; // 向后兼容
+    return aRounds - bRounds;
+  });
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-      <Card className="bg-gray-800 border-gray-600 p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+      <Card className="bg-gray-800 border-gray-600 p-6 max-w-4xl w-full mx-2 max-h-[85vh] overflow-y-auto scrollbar-hide">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-white">积分排行榜</h2>
           <button
@@ -81,7 +106,7 @@ export default function Leaderboard({ onClose }: LeaderboardProps) {
               <p className="text-gray-500 text-sm mt-2">成为第一个上传成绩的玩家吧！</p>
             </div>
           ) : (
-            globalLeaderboard.map((player, index) => (
+            sortedLeaderboard.map((player, index) => (
               <div
                 key={player.id}
                 className={`flex items-center justify-between p-4 rounded-lg border ${
@@ -100,14 +125,18 @@ export default function Leaderboard({ onClose }: LeaderboardProps) {
                   </div>
                   <div>
                     <h3 className="text-white font-semibold text-lg">{player.playerName}</h3>
-                    <div className="flex items-center space-x-4 text-sm text-gray-400">
-                      <span>胜率: {formatWinRate(player.wins, player.gamesPlayed)}</span>
-                      <span>游戏: {player.gamesPlayed}局</span>
+                    <div className="text-sm text-gray-400">
+                      胜率: {formatWinRate(player.wins, player.gamesPlayed, player.defeats, player.draws || 0)}
+                    </div>
+                    <div className="flex items-center space-x-4 text-sm text-gray-400 mt-1">
+                      <span>{player.wins + player.defeats + (player.draws || 0)}局</span>
+                      <span>{player.roundsPlayed || player.gamesPlayed || 0}回合</span>
                     </div>
                     <div className="flex items-center space-x-2 text-xs text-gray-500 mt-1">
                       <span>小胜:{player.smallWins}</span>
                       <span>双杀:{player.doubleKills}</span>
                       <span>团灭:{player.quadKills}</span>
+                      <span>清牌:{player.clearCards}</span>
                     </div>
                   </div>
                 </div>
@@ -115,7 +144,7 @@ export default function Leaderboard({ onClose }: LeaderboardProps) {
                   <div className="text-2xl font-bold text-white">{player.totalScore}</div>
                   <div className="text-sm text-gray-400">积分</div>
                   <div className="text-xs text-gray-500">
-                    {new Date(player.uploadDate).toLocaleDateString()}
+                    {player.uploadDate ? new Date(player.uploadDate).toLocaleDateString() : '未知'}
                   </div>
                 </div>
               </div>

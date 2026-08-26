@@ -222,6 +222,14 @@ export class MemStorage implements IStorage {
     return false;
   }
 
+  async checkPlayerName(playerName: string): Promise<GlobalLeaderboard | null> {
+    return null;
+  }
+
+  async updateLeaderboard(playerName: string, data: InsertGlobalLeaderboard): Promise<GlobalLeaderboard> {
+    throw new Error("全球排行榜功能需要数据库支持");
+  }
+
   private shuffleDeck(deck: string[]): void {
     for (let i = deck.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));

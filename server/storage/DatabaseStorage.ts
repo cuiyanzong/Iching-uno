@@ -117,6 +117,8 @@ export class DatabaseStorage implements IStorage {
   // 全球排行榜实现
   async uploadToLeaderboard(data: InsertGlobalLeaderboard): Promise<GlobalLeaderboard> {
     try {
+      // 恢复原有的覆盖逻辑：先删除现有记录，再插入新记录
+      await db.delete(globalLeaderboard).where(eq(globalLeaderboard.playerName, data.playerName));
       const [result] = await db.insert(globalLeaderboard).values(data).returning();
       return result;
     } catch (error) {
@@ -132,9 +134,18 @@ export class DatabaseStorage implements IStorage {
         .from(globalLeaderboard)
         .orderBy(desc(globalLeaderboard.totalScore))
         .limit(100);
-      return results;
+      // 为旧数据添加默认平局数
+      return results.map(row => ({
+        ...row,
+        draws: row.draws || 0
+      }));
     } catch (error) {
       console.error('获取排行榜失败:', error);
+      // 如果是因为draws字段不存在导致的错误，返回空数组
+      if (error instanceof Error && error.message?.includes('column "draws" does not exist')) {
+        console.log('🔄 draws字段不存在，数据库需要更新');
+        return [];
+      }
       return [];
     }
   }

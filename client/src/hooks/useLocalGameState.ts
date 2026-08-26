@@ -15,6 +15,7 @@ export interface LocalGameStateResult {
   playCard: (cardId: string) => Promise<{ success: boolean; message?: string }>;
   drawCard: () => Promise<{ success: boolean; message?: string }>;
   triggerAIAssist: () => Promise<{ success: boolean; message?: string }>;
+  useSkill: (element: string) => Promise<{ success: boolean; message?: string }>;
   startGame: (playerName: string, battleStyle?: BattleStyle | null) => void;
   restartGame: () => void;
   startNextRound: () => void;
@@ -173,6 +174,35 @@ export function useLocalGameState(): LocalGameStateResult {
     }
   };
 
+  // 使用技能
+  const useSkill = async (element: string) => {
+    if (!gameEngineRef.current) {
+      return { success: false, message: "游戏引擎未初始化" };
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = await gameEngineRef.current.useSkill(element);
+      
+      if (!result.success && result.message) {
+        setError(result.message);
+      }
+
+      return {
+        success: result.success,
+        message: result.message
+      };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "技能使用失败";
+      setError(errorMessage);
+      return { success: false, message: errorMessage };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // 开始下一轮游戏
   const startNextRound = () => {
     if (!gameEngineRef.current) return;
@@ -192,6 +222,7 @@ export function useLocalGameState(): LocalGameStateResult {
     playCard,
     drawCard,
     triggerAIAssist,
+    useSkill,
     startGame,
     restartGame,
     startNextRound

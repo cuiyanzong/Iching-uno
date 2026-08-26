@@ -9,7 +9,7 @@ export default function CentralArea({ currentCard, deckCount }: CentralAreaProps
   // 音频播放现在直接在Card组件内部处理
 
   return (
-    <div className="flex items-end justify-center space-x-6 md:space-x-8">
+    <div className="flex items-end justify-center space-x-3 sm:space-x-4 md:space-x-6 game-table-center">
       {/* Draw Pile - Aligned */}
       <div className="flex flex-col items-center">
         <div className="relative drop-shadow-2xl">

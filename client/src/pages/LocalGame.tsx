@@ -10,8 +10,9 @@ import LocalAIAssistTimer from "@/components/LocalAIAssistTimer";
 import DirectionChangeNotification from "@/components/DirectionChangeNotification";
 import GameCompletionModal from "@/components/GameCompletionModal";
 import TutorialModal from "@/components/TutorialModal";
+import SkillContainer from "@/components/SkillContainer";
 import { useLocalGameState } from "@/hooks/useLocalGameState";
-import type { GameState, BattleStyle } from "@shared/schema";
+import type { GameState, BattleStyle, Element } from "@shared/schema";
 
 
 interface LocalGameProps {
@@ -31,7 +32,8 @@ export default function LocalGame({ playerName, battleStyle, onBackToHome }: Loc
     triggerAIAssist,
     startGame,
     restartGame,
-    startNextRound
+    startNextRound,
+    useSkill
   } = useLocalGameState();
 
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
@@ -190,6 +192,49 @@ export default function LocalGame({ playerName, battleStyle, onBackToHome }: Loc
     // 本地版本无需上报活动
   };
 
+  // 技能触发处理
+  const handleSkillTrigger = async (element: Element) => {
+    if (isLoading || !gameState) return;
+
+    try {
+      const result = await useSkill(element);
+      
+      if (result.success) {
+        // 移除黑色成功提示，技能动画已经足够表达成功状态
+        console.log('✨ 技能使用成功:', result.message);
+      } else {
+        toast({
+          title: "技能释放失败",
+          description: result.message,
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("技能执行错误:", error);
+      toast({
+        title: "技能执行错误",
+        description: "系统错误，请重试",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // 获取当前玩家手牌
+  const getCurrentPlayerCards = (): string[] => {
+    if (!gameState || !currentUserId) return [];
+    
+    const currentPlayer = gameState.players.find(p => p.userId === currentUserId);
+    return currentPlayer?.cards || [];
+  };
+
+  // 检查是否是人类玩家回合
+  const isHumanTurn = (): boolean => {
+    if (!gameState || !currentUserId) return false;
+    
+    const currentPlayer = gameState.players[gameState.currentPlayer];
+    return currentPlayer?.userId === currentUserId && !currentPlayer.isAI;
+  };
+
 
 
 
@@ -260,19 +305,25 @@ export default function LocalGame({ playerName, battleStyle, onBackToHome }: Loc
         
 
         
-        <GameBoard
-          gameState={gameState}
-          onPlayCard={handlePlayCard}
-          onDrawCard={handleDrawCard}
-          onNextRound={handleContinueGame}
-          onStartNewGame={handleRestartGame}
-          isPlayingCard={isLoading}
-          isDrawingCard={isLoading}
-          aiActionStatus={gameState.aiActionStatus || ""}
-          currentUserId={currentUserId}
-          onBackToHome={onBackToHome}
-          isLocalGame={true}
-        />
+        <div className="relative">
+          <GameBoard
+            gameState={gameState}
+            onPlayCard={handlePlayCard}
+            onDrawCard={handleDrawCard}
+            onNextRound={handleContinueGame}
+            onStartNewGame={handleRestartGame}
+            isPlayingCard={isLoading}
+            isDrawingCard={isLoading}
+            aiActionStatus={gameState.aiActionStatus || ""}
+            currentUserId={currentUserId || undefined}
+            onBackToHome={onBackToHome}
+            isLocalGame={true}
+            battleStyle={battleStyle || "strategic"}
+            onSkillTrigger={handleSkillTrigger}
+          />
+          
+
+        </div>
       </div>
 
       {/* 游戏结算模态框 */}
@@ -281,7 +332,8 @@ export default function LocalGame({ playerName, battleStyle, onBackToHome }: Loc
           gameState={gameState}
           onNextRound={handleContinueGame}
           onStartNewGame={handleRestartGame}
-          currentUserId={currentUserId}
+          currentUserId={currentUserId || undefined}
+          onBackToHome={onBackToHome}
         />
       )}
 

@@ -23,7 +23,7 @@ export async function uploadLeaderboard(req: Request, res: Response) {
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('上传排行榜失败:', error);
-    res.status(500).json({ error: '上传失败', details: error.message });
+    res.status(500).json({ error: '上传失败', details: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -82,6 +82,6 @@ export async function updateLeaderboard(req: Request, res: Response) {
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('更新排行榜失败:', error);
-    res.status(500).json({ error: '更新失败', details: error.message });
+    res.status(500).json({ error: '更新失败', details: error instanceof Error ? error.message : String(error) });
   }
 }

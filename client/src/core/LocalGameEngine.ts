@@ -4,13 +4,14 @@
  */
 
 import type { GameState, Player, GameCard, BattleStyle } from "@shared/schema";
-import { hexagramsData } from "../../../shared/hexagrams";
+import { hexagramsData } from "@/../../shared/hexagrams";
 import { getPlayerScoreByName } from "@/utils/permanentScores";
 
 
 export interface AIAction {
-  type: 'play' | 'draw';
+  type: 'play' | 'draw' | 'skill';
   cardId?: string;
+  element?: string;
 }
 
 export interface GameResult {
@@ -25,7 +26,10 @@ export class LocalGameEngine {
   private allCards: GameCard[] = hexagramsData;
   private isProcessingAI: boolean = false;
   private currentBattleStyle: BattleStyle | null = null; // 保存当前战斗风格
-  private simpleAI = new (class {
+  private simpleAI: any; // 引用SimpleAIEngine实例
+  
+  // 注意：现在使用真正的SimpleAIEngine，不再需要内嵌的fallbackAI
+  private fallbackAI = new (class {
     async processAITurn(
       gameState: GameState, 
       currentPlayer: Player,
@@ -44,7 +48,10 @@ export class LocalGameEngine {
         const currentCard = allCards.find(c => c.id === gameState.currentCard);
         if (!currentCard) return;
 
-        // 步骤2: 查找可出的牌
+        // 步骤2: 优先尝试使用技能（仅在运筹帷幄模式）
+        // 注意：技能逻辑已经集成到SimpleAIEngine中，这里不再重复处理
+
+        // 步骤3: 查找可出的牌
         const playableCard = currentPlayer.cards.find(cardId => {
           const card = allCards.find(c => c.id === cardId);
           return card && this.canPlayCard(card, currentCard);
@@ -73,16 +80,13 @@ export class LocalGameEngine {
           
           console.log(`✅ ${currentPlayer.name} 出牌: ${playableCard}`);
         } else {
-          // 步骤3b: 持续抽牌直到能出牌为止
-          let attempts = 0;
-          const maxAttempts = 15; // 最多抽15张防止无限循环
-          let foundPlayableCard = false;
+          // 步骤3b: UNO规则 - 持续抽牌直到能出牌为止
+          onStateUpdate(`${currentPlayer.name}抽牌`);
+          onGameUpdate();
+          await this.delay(800);
           
-          while (attempts < maxAttempts && !foundPlayableCard) {
-            onStateUpdate(`${currentPlayer.name}抽牌`);
-            onGameUpdate();
-            await this.delay(800);
-            
+          // UNO规则：必须抽到能出的牌为止
+          while (true) {
             const drawnCard = this.drawCardFromDeck(gameState);
             if (!drawnCard) {
               console.log(`${currentPlayer.name} 牌堆空了，结束回合`);
@@ -115,16 +119,14 @@ export class LocalGameEngine {
               }
               
               console.log(`✅ ${currentPlayer.name} 出刚抽的牌: ${drawnCard}`);
-              foundPlayableCard = true; // 找到可出的牌，结束循环
+              break; // 找到可出的牌，结束循环
             } else {
               console.log(`${currentPlayer.name} 抽到 ${drawnCard} 不能出，继续抽牌`);
-              attempts++;
-              // 继续抽牌，不结束回合
+              // 继续抽牌
+              onStateUpdate(`${currentPlayer.name}抽牌`);
+              onGameUpdate();
+              await this.delay(800);
             }
-          }
-          
-          if (attempts >= maxAttempts) {
-            console.log(`${currentPlayer.name} 抽牌次数达到上限，结束回合`);
           }
         }
 
@@ -175,9 +177,15 @@ export class LocalGameEngine {
     private delay(ms: number): Promise<void> {
       return new Promise(resolve => setTimeout(resolve, ms));
     }
+
+
   })();
 
   constructor() {
+    // 初始化SimpleAIEngine
+    import('./SimpleAIEngine').then(({ SimpleAIEngine }) => {
+      this.simpleAI = new SimpleAIEngine();
+    });
     this.setupEventHandlers();
   }
 
@@ -198,6 +206,11 @@ export class LocalGameEngine {
   createGame(playerName: string, battleStyle?: BattleStyle | null): GameState {
     const gameId = Date.now();
     const userId = Date.now() + Math.floor(Math.random() * 1000);
+
+    // 🧹 清理上一局的技能清牌事件信息
+    (window as any).skillClearInfo = null;
+    (window as any).lastSkillEvents = [];
+    console.log('🧹 已清理上一局技能清牌事件信息');
 
     // 保存战斗风格
     this.currentBattleStyle = battleStyle || "strategic";
@@ -440,7 +453,54 @@ export class LocalGameEngine {
     const currentCard = this.allCards.find(card => card.id === this.gameState!.currentCard);
     if (!currentCard) return;
 
-    // 寻找可出的牌
+    // 🎯 优先级0: AI助手检测技能机会（仅在运筹帷幄模式）
+    if (this.isSkillModeEnabled()) {
+      try {
+        const { SkillDetector, SkillAnalyzer } = await import("@/lib/skillSystem");
+        
+        const opportunities = SkillDetector.checkElementResonance(
+          this.gameState.currentCard,
+          player.cards
+        );
+
+        for (const opportunity of opportunities) {
+          const analysis = SkillAnalyzer.analyzeSkillValue(
+            opportunity,
+            this.gameState,
+            player.id.toString()
+          );
+
+          if (analysis.shouldUse) {
+            console.log(`🤖 AI助手帮助 ${player.name} 使用技能: ${opportunity.skillName}`);
+            const skillResult = await this.useSkill(opportunity.element);
+            if (skillResult.success) {
+              // 技能事件已在skillSystem.ts中自动触发
+              
+              // 检查游戏结束 - AI助手技能清牌时等待动画完成
+              if (player.cards.length === 0) {
+                console.log(`🎉 AI助手帮助 ${player.name} 技能清牌致胜！等待动画完成...`);
+                this.gameState.aiActionStatus = "";
+                // 等待技能动画完成（1.5秒）后再进入结算页面
+                setTimeout(() => {
+                  console.log(`🎭 技能动画完成，进入结算页面`);
+                  this.handleRoundEnd(player.id);
+                }, 1500);
+                return;
+              }
+              
+              this.moveToNextPlayer();
+              this.gameState.aiActionStatus = "";
+              this.emitGameUpdate();
+              return;
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`AI助手技能检测错误:`, error);
+      }
+    }
+
+    // 🎯 保持原有逻辑：技能不可用时寻找可出的牌
     const playableCard = player.cards.find(cardId => {
       const card = this.allCards.find(c => c.id === cardId);
       return card && this.canPlayCard(card, currentCard);
@@ -542,8 +602,8 @@ export class LocalGameEngine {
     }
   }
 
-  // 简化的AI回合处理器
-  private processAITurns(): void {
+  // 简化的AI回合处理器 - 使用SimpleAIEngine
+  private async processAITurns(): Promise<void> {
     if (!this.gameState || this.isProcessingAI) return;
 
     const currentPlayer = this.gameState.players[this.gameState.currentPlayer];
@@ -552,30 +612,35 @@ export class LocalGameEngine {
     console.log(`🤖 简单AI处理: ${currentPlayer.name}`);
     this.isProcessingAI = true;
     
-    // 使用简单AI引擎
-    this.simpleAI.processAITurn(
-      this.gameState,
-      currentPlayer,
-      (status: string) => {
-        if (this.gameState) {
-          this.gameState.aiActionStatus = status;
-          this.emitGameUpdate(); // 立即更新状态
-        }
-      },
-      () => this.emitGameUpdate()
-    ).then(() => {
+    try {
+      // 确保SimpleAIEngine已加载
+      if (!this.simpleAI) {
+        const { SimpleAIEngine } = await import('./SimpleAIEngine');
+        this.simpleAI = new SimpleAIEngine();
+      }
+      
+      // 使用包含完整清牌等待逻辑的SimpleAIEngine
+      await this.simpleAI.processAITurn(
+        this.gameState,
+        currentPlayer,
+        (status: string) => {
+          if (this.gameState) {
+            this.gameState.aiActionStatus = status;
+            this.emitGameUpdate(); // 立即更新状态
+          }
+        },
+        () => this.emitGameUpdate()
+      );
+      
       console.log(`🏁 AI ${currentPlayer.name} 回合结束，手牌数量: ${currentPlayer.cards.length}`);
       
       this.isProcessingAI = false;
       this.gameState.aiActionStatus = "";
       
-      // 检查游戏是否结束
+      // 注意：游戏结束检查现在在SimpleAIEngine中处理，包含技能清牌等待逻辑
       if (currentPlayer.cards.length === 0) {
-        console.log(`🎉 ${currentPlayer.name} 获胜！游戏结束`);
-        this.isProcessingAI = false; // 立即停止AI处理
-        this.gameState.aiActionStatus = ""; // 清除AI状态
-        this.handleRoundEnd(currentPlayer.userId!);
-        return;
+        console.log(`🎉 ${currentPlayer.name} 获胜！游戏结束 - 已在SimpleAI中处理`);
+        return; // SimpleAIEngine已经处理了清牌等待和结算
       }
       
       // 移动到下一个玩家
@@ -588,7 +653,8 @@ export class LocalGameEngine {
         console.log(`⏰ 准备启动AI回合检查...`);
         this.processAITurns();
       }, 800);
-    }).catch(error => {
+      
+    } catch (error) {
       console.error('🚨 AI处理错误:', error);
       this.isProcessingAI = false;
       if (this.gameState) {
@@ -602,7 +668,7 @@ export class LocalGameEngine {
           this.processAITurns();
         }, 800);
       }
-    });
+    }
   }
 
   // 处理单个AI回合
@@ -639,12 +705,16 @@ export class LocalGameEngine {
 
     // AI决策
     const action = await this.makeAIDecision(currentPlayer, currentCard);
-    console.log(`🎯 AI决策结果: ${action.type}${action.cardId ? `, 卡牌: ${action.cardId}` : ''}`);
-    
-    if (action.type === 'play' && action.cardId) {
+    if (action.type === 'skill' && action.element) {
+      console.log(`🎯 AI决策结果: 技能使用 - ${action.element}元素`);
+      console.log(`✨ AI ${currentPlayer.name} 准备使用技能: ${action.element}元素`);
+      await this.executeAISkill(currentPlayer, action.element);
+    } else if (action.type === 'play' && action.cardId) {
+      console.log(`🎯 AI决策结果: 出牌 - ${action.cardId}`);
       console.log(`▶️ AI ${currentPlayer.name} 准备出牌: ${action.cardId}`);
       await this.executeAIPlay(currentPlayer, action.cardId, currentCard);
     } else {
+      console.log(`🎯 AI决策结果: 抽牌`);
       console.log(`🃏 AI ${currentPlayer.name} 准备抽牌`);
       await this.executeAIDraw(currentPlayer, currentCard);
     }
@@ -652,8 +722,120 @@ export class LocalGameEngine {
     this.isProcessingAI = false;
   }
 
+  // AI技能执行
+  private async executeAISkill(player: Player, element: string): Promise<void> {
+    if (!this.gameState) return;
+
+    console.log(`✨ 执行AI技能: ${player.name} -> ${element}元素技能`);
+    
+    // 显示技能使用状态
+    this.gameState.aiActionStatus = `${player.name}使用技能`;
+    this.emitGameUpdate();
+    await this.delay(800);
+
+    try {
+      const skillResult = await this.useSkill(element);
+      if (skillResult.success) {
+        console.log(`✅ ${player.name} 技能使用成功: ${skillResult.message}`);
+        
+        // 技能事件已在skillSystem.ts中自动触发
+        
+        // 检查胜利条件 - 技能清牌时等待动画完成
+        if (player.cards.length === 0) {
+          console.log(`🎉 ${player.name} 技能清牌致胜！等待动画完成...`);
+          // 等待技能动画完成（1.5秒）后再进入结算页面
+          setTimeout(() => {
+            console.log(`🎭 技能动画完成，进入结算页面`);
+            this.handleRoundEnd(player.id);
+          }, 1500);
+          return;
+        }
+      } else {
+        console.log(`❌ ${player.name} 技能使用失败: ${skillResult.message}`);
+        // 技能失败时退回到普通出牌逻辑
+        const currentCard = this.allCards.find(card => card.id === this.gameState!.currentCard);
+        if (currentCard) {
+          const fallbackAction = await this.makeAIDecisionFallback(player, currentCard);
+          if (fallbackAction.type === 'play' && fallbackAction.cardId) {
+            console.log(`🔄 ${player.name} 技能失败，退回普通出牌: ${fallbackAction.cardId}`);
+            await this.executeAIPlay(player, fallbackAction.cardId, currentCard);
+            return;
+          } else {
+            console.log(`🔄 ${player.name} 技能失败且无法出牌，改为抽牌`);
+            await this.executeAIDraw(player, currentCard);
+            return;
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`AI技能执行错误:`, error);
+      // 技能执行异常时也退回到普通逻辑
+      this.gameState.aiActionStatus = `${player.name}出牌`;
+      const currentCard = this.allCards.find(card => card.id === this.gameState!.currentCard);
+      if (currentCard) {
+        const fallbackAction = await this.makeAIDecisionFallback(player, currentCard);
+        if (fallbackAction.type === 'play' && fallbackAction.cardId) {
+          await this.executeAIPlay(player, fallbackAction.cardId, currentCard);
+          return;
+        } else {
+          await this.executeAIDraw(player, currentCard);  
+          return;
+        }
+      }
+    }
+
+    this.gameState.aiActionStatus = "";
+  }
+
+  // AI决策后备方案（技能失败时使用）
+  private async makeAIDecisionFallback(player: Player, currentCard: GameCard): Promise<AIAction> {
+    // 互卦优先
+    for (const cardId of player.cards) {
+      const card = this.allCards.find(c => c.id === cardId);
+      if (card && this.isComplementaryHexagram(card, currentCard)) {
+        return { type: 'play', cardId };
+      }
+    }
+
+    // 普通匹配
+    const playableCard = player.cards.find(cardId => {
+      const card = this.allCards.find(c => c.id === cardId);
+      return card && this.canPlayCard(card, currentCard);
+    });
+
+    return playableCard ? { type: 'play', cardId: playableCard } : { type: 'draw' };
+  }
+
   // AI决策
   private async makeAIDecision(player: Player, currentCard: GameCard): Promise<AIAction> {
+    // 🎯 优先级0: 检测技能机会（仅在运筹帷幄模式）
+    if (this.isSkillModeEnabled()) {
+      try {
+        const { SkillDetector, SkillAnalyzer } = await import("@/lib/skillSystem");
+        
+        const opportunities = SkillDetector.checkElementResonance(
+          this.gameState!.currentCard,
+          player.cards
+        );
+
+        for (const opportunity of opportunities) {
+          const analysis = SkillAnalyzer.analyzeSkillValue(
+            opportunity,
+            this.gameState!,
+            player.id.toString()
+          );
+
+          if (analysis.shouldUse) {
+            console.log(`🤖 ${player.name} 决定使用技能: ${opportunity.skillName}`);
+            return { type: 'skill', element: opportunity.element };
+          }
+        }
+      } catch (error) {
+        console.error(`AI技能检测错误:`, error);
+      }
+    }
+
+    // 🎯 保持原有逻辑：技能不可用时的决策
     // 寻找最佳卡牌（优先互卦）
     let bestCard: string | null = null;
     
@@ -997,7 +1179,20 @@ export class LocalGameEngine {
   }
 
   private setupEventHandlers(): void {
-    // 游戏事件处理
+    // 监听游戏结束事件 (由SimpleAIEngine触发)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('gameRoundEnd', (event: any) => {
+        const { playerId } = event.detail;
+        console.log(`🎯 接收到游戏结束事件: 玩家${playerId}获胜`);
+        
+        if (this.gameState) {
+          this.isProcessingAI = false; // 停止AI处理
+          this.gameState.aiActionStatus = ""; // 清除AI状态
+          this.handleRoundEnd(playerId);
+          this.emitGameUpdate();
+        }
+      });
+    }
   }
 
   // 获取游戏状态
@@ -1014,5 +1209,199 @@ export class LocalGameEngine {
     this.eventTarget.removeEventListener(event, handler as EventListener);
   }
 
+  // === 技能系统扩展 ===
+  
+  /**
+   * 检查战斗风格是否支持技能系统
+   */
+  private isSkillModeEnabled(): boolean {
+    // 允许所有战斗模式使用技能系统
+    return true;
+  }
 
+  /**
+   * 人类玩家使用技能
+   */
+  async useSkill(element: string): Promise<{ success: boolean; message?: string }> {
+    if (!this.gameState || !this.isSkillModeEnabled()) {
+      return { success: false, message: "当前模式不支持技能系统" };
+    }
+
+    const currentPlayer = this.gameState.players[this.gameState.currentPlayer];
+    if (currentPlayer.isAI) {
+      return { success: false, message: "只有人类玩家可以手动触发技能" };
+    }
+
+    try {
+      // 动态导入技能系统模块
+      const { SkillExecutor } = await import("@/lib/skillSystem");
+      
+      // 验证技能执行条件
+      const validation = SkillExecutor.validateSkillExecution(
+        element as any, 
+        currentPlayer.cards, 
+        this.gameState.currentCard
+      );
+      
+      if (!validation.valid) {
+        return { success: false, message: validation.reason };
+      }
+
+      // 执行技能，传递playerId、当前分数和战斗模式用于奖励计算
+      const result = SkillExecutor.executeElementSkill(
+        element as any, 
+        currentPlayer.cards, 
+        this.gameState,
+        currentPlayer.id,
+        currentPlayer.score,
+        this.currentBattleStyle
+      );
+
+      // 更新玩家手牌
+      currentPlayer.cards = result.cardsRemaining;
+      
+      // 更新当前台面卡牌
+      this.gameState.currentCard = result.finalCard;
+      this.gameState.discardPile.push(result.finalCard);
+      
+      // 技能清牌奖励：只有清牌时才增加战斗分
+      console.log(`🔍 检查技能清牌奖励: isSkillClear=${result.isSkillClear}, scoreBonus=${result.scoreBonus}, displayBonus=${result.displayBonus}, 玩家当前分数=${currentPlayer.score}`);
+      console.log(`🔍 result对象完整内容:`, result);
+      
+      if (result.isSkillClear) {
+        const oldScore = currentPlayer.score;
+        
+        console.log(`🎯 技能清牌确认: 玩家${currentPlayer.name}, 旧分数=${oldScore}, scoreBonus=${result.scoreBonus}, scoreBonus类型=${typeof result.scoreBonus}`);
+        
+        // 实际分数增加（可能为0如果已达上限）
+        if (result.scoreBonus > 0) {
+          console.log(`✅ 准备加分: ${oldScore} + ${result.scoreBonus} = ${oldScore + result.scoreBonus}`);
+          currentPlayer.score += result.scoreBonus;
+          if (currentPlayer.userId) {
+            this.gameState.scores[currentPlayer.userId] = currentPlayer.score;
+          }
+          console.log(`✅ 加分完成: ${currentPlayer.name} 分数变为 ${currentPlayer.score}`);
+        } else {
+          console.log(`❌ 不加分: scoreBonus=${result.scoreBonus} 不大于0`);
+        }
+        
+        console.log(`🎯 技能清牌处理: ${currentPlayer.name} 分数从 ${oldScore} 变为 ${currentPlayer.score} (实际+${result.scoreBonus}分), 显示奖励 ${result.displayBonus || 0} 分`);
+        
+
+      }
+
+      // 发送技能使用事件
+      console.log(`✨ 技能使用成功: ${currentPlayer.name} 使用了 ${result.skillUsed}`);
+      
+      // 检查胜利条件 - 技能清牌时等待动画完成
+      if (currentPlayer.cards.length === 0) {
+        console.log(`🎉 ${currentPlayer.name} 技能清牌致胜！等待动画完成...`);
+        // 记录技能清牌信息
+        if (result.isSkillClear) {
+          (window as any).skillClearInfo = {
+            playerId: currentPlayer.id,
+            skillName: result.skillUsed,
+            clearedCards: result.clearedCards || 0,
+            bonusScore: result.scoreBonus || 0,
+            displayBonus: result.displayBonus || (result.clearedCards || 0) * 10,
+            finalScore: result.finalScore || currentPlayer.score
+          };
+        }
+        // 等待技能动画完成（1.5秒）后再进入结算页面
+        setTimeout(() => {
+          console.log(`🎭 技能动画完成，进入结算页面`);
+          this.handleRoundEnd(currentPlayer.id);
+        }, 1500);
+        return { success: true, message: "" };
+      }
+
+      // 🎯 技能系统不触发方向转换，直接切换到下一个玩家
+      this.moveToNextPlayer();
+      this.emitGameUpdate();
+      
+      // 继续AI回合
+      setTimeout(() => this.processAITurns(), 1000);
+
+      return { success: true, message: "" }; // 移除黑色提示消息
+      
+    } catch (error) {
+      console.error("技能执行失败:", error);
+      return { success: false, message: `技能执行失败: ${error instanceof Error ? error.message : "未知错误"}` };
+    }
+  }
+
+  /**
+   * AI玩家尝试使用技能
+   */
+  private async tryAISkill(player: any): Promise<boolean> {
+    if (!this.gameState || !this.isSkillModeEnabled()) {
+      return false;
+    }
+
+    try {
+      const { SkillDetector, SkillAnalyzer } = require("@/lib/skillSystem");
+      
+      // 检测可用技能
+      const opportunities = SkillDetector.checkElementResonance(
+        this.gameState.currentCard,
+        player.cards
+      );
+
+      if (opportunities.length === 0) {
+        return false;
+      }
+
+      // 分析每个技能机会的价值
+      for (const opportunity of opportunities) {
+        const analysis = SkillAnalyzer.analyzeSkillValue(
+          opportunity,
+          this.gameState,
+          player.id.toString()
+        );
+
+        // AI决策：如果技能价值足够高，就使用
+        if (analysis.shouldUse) {
+          console.log(`🤖 ${player.name} 决定使用技能: ${opportunity.skillName}`);
+          
+          const skillResult = await this.useSkill(opportunity.element);
+          if (skillResult.success) {
+            console.log(`✅ ${player.name} 成功使用技能: ${skillResult.message}`);
+            return true;
+          }
+        }
+      }
+
+      return false;
+    } catch (error) {
+      console.error(`AI技能处理错误:`, error);
+      return false;
+    }
+  }
+
+
+
+  /**
+   * 获取当前玩家的可用技能
+   */
+  getAvailableSkills(): any[] {
+    if (!this.gameState || !this.isSkillModeEnabled()) {
+      return [];
+    }
+
+    const currentPlayer = this.gameState.players[this.gameState.currentPlayer];
+    if (currentPlayer.isAI) {
+      return [];
+    }
+
+    try {
+      const { SkillDetector } = require("@/lib/skillSystem");
+      return SkillDetector.checkElementResonance(
+        this.gameState.currentCard,
+        currentPlayer.cards
+      );
+    } catch (error) {
+      console.error("获取技能失败:", error);
+      return [];
+    }
+  }
 }

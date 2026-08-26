@@ -1,5 +1,6 @@
 import { Card as UICard } from "@/components/ui/card";
 import Card from "./Card";
+
 import type { Player } from "@shared/schema";
 import { useRef, useState, useEffect, useCallback } from "react";
 
@@ -50,37 +51,15 @@ export default function PlayerArea({
   
   const isHuman = !player.isAI;
   
+
+  
   // Simple scrolling for bottom player only
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
   const [previousCardCount, setPreviousCardCount] = useState(player.cards.length);
   
   const SCROLL_AMOUNT = 120;
 
-  // Update scroll indicators
-  const updateScrollIndicators = useCallback(() => {
-    if (!scrollContainerRef.current) return;
-    
-    const container = scrollContainerRef.current;
-    const scrollLeft = container.scrollLeft;
-    const maxScroll = container.scrollWidth - container.clientWidth;
-    
-    setCanScrollLeft(scrollLeft > 5);
-    setCanScrollRight(scrollLeft < maxScroll - 5);
-  }, []);
 
-  const scrollLeftBy = useCallback(() => {
-    if (!scrollContainerRef.current) return;
-    scrollContainerRef.current.scrollBy({ left: -SCROLL_AMOUNT, behavior: 'smooth' });
-    setTimeout(updateScrollIndicators, 150);
-  }, [updateScrollIndicators]);
-
-  const scrollRightBy = useCallback(() => {
-    if (!scrollContainerRef.current) return;
-    scrollContainerRef.current.scrollBy({ left: SCROLL_AMOUNT, behavior: 'smooth' });
-    setTimeout(updateScrollIndicators, 150);
-  }, [updateScrollIndicators]);
 
   // Auto-scroll to show newly drawn cards
   const scrollToEnd = useCallback(() => {
@@ -89,8 +68,7 @@ export default function PlayerArea({
       left: scrollContainerRef.current.scrollWidth, 
       behavior: 'smooth' 
     });
-    setTimeout(updateScrollIndicators, 300);
-  }, [updateScrollIndicators]);
+  }, []);
 
   // Auto-scroll to new cards when cards are added
   useEffect(() => {
@@ -106,27 +84,30 @@ export default function PlayerArea({
     setPreviousCardCount(currentCardCount);
   }, [player.cards.length, previousCardCount, position, scrollToEnd]);
 
-  // Setup scroll for bottom player only
+  // Setup scroll and wheel support for bottom player only
   useEffect(() => {
     if (position !== "bottom") return;
     
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    const handleScroll = () => updateScrollIndicators();
-    container.addEventListener('scroll', handleScroll);
+    // Mouse wheel support for desktop
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      container.scrollBy({ left: e.deltaY, behavior: 'smooth' });
+    };
     
-    setTimeout(() => {
-      updateScrollIndicators();
-    }, 100);
+    container.addEventListener('wheel', handleWheel, { passive: false });
     
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, [updateScrollIndicators, player.cards.length, position]);
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+    };
+  }, [player.cards.length, position]);
 
   // Top player layout
   if (position === "top") {
     return (
-      <div className="absolute top-8 left-1/2 transform -translate-x-1/2">
+      <div className="absolute top-8 left-1/2 transform -translate-x-1/2 skill-position-top">
         <div className="text-center mb-3">
           <div className="flex items-center justify-center space-x-2 mb-1">
             <span className={`text-sm font-semibold ${isCurrentPlayer ? "text-blue-400" : "text-gray-300"}`}>
@@ -170,7 +151,7 @@ export default function PlayerArea({
   // Left player layout
   if (position === "left") {
     return (
-      <div className="absolute left-6 top-1/2 transform -translate-y-1/2">
+      <div className="absolute left-1 sm:left-2 md:left-4 lg:left-6 top-1/2 transform -translate-y-1/2 skill-position-left">
         <div className="text-center mb-3">
           <div className="flex items-center justify-center space-x-2 mb-1">
             <span className={`text-sm font-semibold ${isCurrentPlayer ? "text-blue-400" : "text-gray-300"}`}>
@@ -216,7 +197,7 @@ export default function PlayerArea({
   // Right player layout
   if (position === "right") {
     return (
-      <div className="absolute right-6 top-1/2 transform -translate-y-1/2">
+      <div className="absolute right-1 sm:right-2 md:right-4 lg:right-6 top-1/2 transform -translate-y-1/2 skill-position-right">
         <div className="text-center mb-3">
           <div className="flex items-center justify-center space-x-2 mb-1">
             <span className={`text-sm font-semibold ${isCurrentPlayer ? "text-blue-400" : "text-gray-300"}`}>
@@ -259,68 +240,38 @@ export default function PlayerArea({
     );
   }
 
-  // Bottom player (human) layout with scrolling
-  const needsScrollButtons = player.cards.length > 4;
-
+  // Bottom player (human) layout with mouse wheel scrolling
   return (
-    <div>
-      <div className="relative flex items-center">
-        {/* Left scroll button */}
-        {needsScrollButtons && (
-          <button
-            className={`bg-black/70 hover:bg-black/90 text-white rounded-full p-2 mr-2 z-10 transition-all duration-200 ${
-              canScrollLeft ? 'opacity-100' : 'opacity-50'
-            }`}
-            onClick={scrollLeftBy}
-            disabled={!canScrollLeft}
-          >
-            <div className="w-3 h-3 border-l-2 border-t-2 border-white transform rotate-[-45deg]"></div>
-          </button>
-        )}
-        
-        {/* Scrollable card container */}
-        <div className="flex-1 overflow-hidden">
-          <div 
-            ref={scrollContainerRef}
-            className="overflow-x-auto scrollbar-hide"
-            style={{ 
-              scrollBehavior: 'smooth',
-              WebkitOverflowScrolling: 'touch'
-            }}
-          >
-            <div className="flex space-x-3 px-4">
-              {player.cards.map((cardId, index) => (
-                <div key={`${cardId}-${index}`} className="flex-shrink-0">
-                  <Card
-                    cardId={cardId}
-                    size="large"
-                    showBack={false}
-                    isSelectable={isHuman && isCurrentPlayer && onPlayCard && !isPlayingCard}
-                    onClick={isHuman && isCurrentPlayer && onPlayCard && !isPlayingCard ? () => onPlayCard(cardId) : undefined}
-                  />
-                </div>
-              ))}
-            </div>
+    <div className="human-player-area relative">
+      {/* Scrollable card container */}
+      <div className="overflow-hidden">
+        <div 
+          ref={scrollContainerRef}
+          className="overflow-x-auto scrollbar-hide"
+          style={{ 
+            scrollBehavior: 'smooth',
+            WebkitOverflowScrolling: 'touch'
+          }}
+        >
+          <div className="flex space-x-3 px-4">
+            {player.cards.map((cardId, index) => (
+              <div key={`${cardId}-${index}`} className="flex-shrink-0">
+                <Card
+                  cardId={cardId}
+                  size="large"
+                  showBack={false}
+                  isSelectable={isHuman && isCurrentPlayer && onPlayCard && !isPlayingCard}
+                  onClick={isHuman && isCurrentPlayer && onPlayCard && !isPlayingCard ? () => onPlayCard(cardId) : undefined}
+                />
+              </div>
+            ))}
           </div>
         </div>
-        
-        {/* Right scroll button */}
-        {needsScrollButtons && (
-          <button
-            className={`bg-black/70 hover:bg-black/90 text-white rounded-full p-2 ml-2 z-10 transition-all duration-200 ${
-              canScrollRight ? 'opacity-100' : 'opacity-50'
-            }`}
-            onClick={scrollRightBy}
-            disabled={!canScrollRight}
-          >
-            <div className="w-3 h-3 border-r-2 border-t-2 border-white transform rotate-[45deg]"></div>
-          </button>
-        )}
       </div>
       
-      {/* UNO indicator only */}
+      {/* UNO indicator with absolute positioning to prevent layout shift */}
       {player.cards.length === 1 && (
-        <div className="text-center mt-3">
+        <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2">
           <span className="bg-red-600 text-white px-3 py-1 rounded text-sm font-bold animate-pulse">
             UNO!
           </span>

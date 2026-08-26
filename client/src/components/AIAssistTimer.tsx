@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Clock, Bot } from 'lucide-react';
-import { apiRequest } from '@/lib/queryClient';
+// Remove unused import
 import type { GameState } from '@shared/schema';
 
 interface AIAssistTimerProps {
@@ -15,7 +15,8 @@ function AIAssistTimer({ gameState, currentUserId, triggerAIAssist }: AIAssistTi
   const [isTriggering, setIsTriggering] = useState(false);
 
   // 检查是否应该显示AI助手计时器 - 全覆盖显示模式
-  const targetPlayer = gameState?.players?.[gameState?.aiAssistant?.targetPlayerId];
+  const targetPlayer = gameState?.aiAssistant?.targetPlayerId !== undefined ? 
+    gameState?.players?.[gameState.aiAssistant.targetPlayerId] : undefined;
   const isZombiePlayer = targetPlayer && !targetPlayer.socketId && targetPlayer.isAI !== true;
   
   const shouldShowTimer = gameState?.aiAssistant?.active &&

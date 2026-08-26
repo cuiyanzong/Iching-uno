@@ -6,6 +6,7 @@ interface ScoreChangeAnimationProps {
   newScore: number;
   show: boolean;
   className?: string;
+  skillBonus?: number; // 技能清牌奖励分数
 }
 
 export default function ScoreChangeAnimation({
@@ -13,7 +14,8 @@ export default function ScoreChangeAnimation({
   change,
   newScore,
   show,
-  className = ''
+  className = '',
+  skillBonus
 }: ScoreChangeAnimationProps) {
   const [isVisible, setIsVisible] = useState(false);
   
@@ -49,8 +51,8 @@ export default function ScoreChangeAnimation({
   };
   
   return (
-    <div className={`flex items-center justify-center ${className}`}>
-      {/* 简洁的积分变化显示 */}
+    <div className={`flex flex-col items-center justify-center ${className}`}>
+      {/* 主积分变化显示 */}
       <div className={`transition-all duration-500 ${
         isVisible ? 'opacity-100 scale-105 translate-y-0' : 'opacity-0 scale-95 translate-y-2'
       }`}>
@@ -58,6 +60,20 @@ export default function ScoreChangeAnimation({
           {change > 0 ? `+${change}` : `${change}`}
         </div>
       </div>
+      
+      {/* 技能清牌奖励动效 */}
+      {skillBonus && skillBonus > 0 && (
+        <div className={`transition-all duration-700 delay-300 ${
+          isVisible ? 'opacity-100 scale-110 translate-y-0' : 'opacity-0 scale-90 translate-y-1'
+        }`}>
+          <div className="text-sm font-bold text-yellow-400 animate-bounce">
+            +{skillBonus}
+          </div>
+          <div className="text-xs text-yellow-300 text-center">
+            技能奖励
+          </div>
+        </div>
+      )}
     </div>
   );
 }
