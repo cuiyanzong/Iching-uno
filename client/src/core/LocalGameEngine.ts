@@ -25,7 +25,7 @@ export class LocalGameEngine {
   private eventTarget: EventTarget = new EventTarget();
   private allCards: GameCard[] = hexagramsData;
   private isProcessingAI: boolean = false;
-  private currentBattleStyle: BattleStyle | null = null; // 保存当前战斗风格
+  private currentBattleStyle: BattleStyle = "strategic"; // 保存当前战斗风格
   private simpleAI: any; // 引用SimpleAIEngine实例
   
   // 注意：现在使用真正的SimpleAIEngine，不再需要内嵌的fallbackAI
@@ -312,7 +312,7 @@ export class LocalGameEngine {
       this.processAITurns();
     }, 1000);
     
-    return this.gameState;
+    return this.gameState!;
   }
 
   // 玩家出牌
@@ -459,7 +459,7 @@ export class LocalGameEngine {
         const { SkillDetector, SkillAnalyzer } = await import("@/lib/skillSystem");
         
         const opportunities = SkillDetector.checkElementResonance(
-          this.gameState.currentCard,
+          currentCard.id,
           player.cards
         );
 
@@ -555,7 +555,7 @@ export class LocalGameEngine {
       this.emitGameUpdate();
       await this.delay(800);
 
-      const drawnCard = this.drawCardFromDeck(this.gameState);
+      const drawnCard = this.drawCardFromDeck();
       if (!drawnCard) {
         console.log('牌堆为空，AI助手停止抽牌');
         break;
@@ -694,7 +694,10 @@ export class LocalGameEngine {
       return;
     }
 
-    const currentCard = this.allCards.find(card => card.id === this.gameState.currentCard);
+    const currentCardId = this.gameState.currentCard;
+    const currentCard = currentCardId
+      ? this.allCards.find(card => card.id === currentCardId)
+      : undefined;
     if (!currentCard) {
       console.log(`❌ AI回合失败: 找不到当前台面卡牌 ${this.gameState.currentCard}`);
       this.isProcessingAI = false;
@@ -814,7 +817,7 @@ export class LocalGameEngine {
         const { SkillDetector, SkillAnalyzer } = await import("@/lib/skillSystem");
         
         const opportunities = SkillDetector.checkElementResonance(
-          this.gameState!.currentCard,
+          currentCard.id,
           player.cards
         );
 
@@ -1231,6 +1234,10 @@ export class LocalGameEngine {
     if (currentPlayer.isAI) {
       return { success: false, message: "只有人类玩家可以手动触发技能" };
     }
+    const currentCardId = this.gameState.currentCard;
+    if (!currentCardId) {
+      return { success: false, message: "当前台面没有可用于触发技能的卡牌" };
+    }
 
     try {
       // 动态导入技能系统模块
@@ -1240,7 +1247,7 @@ export class LocalGameEngine {
       const validation = SkillExecutor.validateSkillExecution(
         element as any, 
         currentPlayer.cards, 
-        this.gameState.currentCard
+        currentCardId
       );
       
       if (!validation.valid) {

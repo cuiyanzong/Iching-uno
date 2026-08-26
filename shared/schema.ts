@@ -88,7 +88,9 @@ export type Player = {
   score: number;
   isAI: boolean;
   userId?: number; // For real players
-  socketId?: string; // For websocket connection tracking
+  socketId?: string | null; // For websocket connection tracking
+  isReady?: boolean;
+  originalName?: string;
 };
 
 export type GameMode = "single";
@@ -125,6 +127,10 @@ export type GameState = {
   round: number;
   maxPlayers: number;
   aiActionStatus?: string; // Display AI action status like "阿豪抽牌", "老宋出牌"
+  playerActivity?: Record<string, unknown>;
+  roomCode?: string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
   notifications?: GameNotification[]; // 游戏通知数组
   // AI助手状态 - 简化版本
   aiAssistant?: {
