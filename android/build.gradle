@@ -1,7 +1,6 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
 buildscript {
-    
     repositories {
         google()
         mavenCentral()
@@ -9,12 +8,7 @@ buildscript {
     dependencies {
         classpath 'com.android.tools.build:gradle:8.7.2'
         classpath 'com.google.gms:google-services:4.4.2'
-
-        // NOTE: Do not place your application dependencies here; they belong
-        // in the individual module build.gradle files
     }
-    
-    // Force Java 17 for all build scripts
     ext.java_version = JavaVersion.VERSION_17
 }
 
@@ -25,8 +19,6 @@ allprojects {
         google()
         mavenCentral()
     }
-    
-    // Force Java 17 for all subprojects
     afterEvaluate { project ->
         if (project.hasProperty('android')) {
             project.android {
@@ -36,13 +28,22 @@ allprojects {
                 }
             }
         }
-        
-        // Force Java 17 for all JavaCompile tasks
         project.tasks.withType(JavaCompile).configureEach {
             sourceCompatibility = JavaVersion.VERSION_17
             targetCompatibility = JavaVersion.VERSION_17
             options.compilerArgs.addAll(['--release', '17'])
         }
+    }
+}
+
+gradle.buildFinished { result ->
+    if (result.failure != null) {
+        def cause = result.failure
+        while (cause.cause != null && cause.cause != cause) {
+            cause = cause.cause
+        }
+        def message = (cause.message ?: cause.toString()).replaceAll('[\\r\\n]+', ' ')
+        println("::error file=android/build.gradle,title=Gradle build failed::${message}")
     }
 }
 
